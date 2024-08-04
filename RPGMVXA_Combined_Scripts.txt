@@ -1,0 +1,388 @@
+#------------------------------------------------------------------------------#
+#  Combined Script: Combined Functionality of Various Scripts
+#------------------------------------------------------------------------------#
+#  For:       RPGMAKER VX ACE
+#  By:        AeliusDN
+#  Twitter/X: @AeliusDN
+#------------------------------------------------------------------------------#
+#  Expands upon A1 Name Window and Galv's Busts among other things.
+#
+#  Creates busts and name windows as well as customizable script calls. Such as
+#  Bust flipping, sliding, shaking, and animations.
+#  Name Window with expanded use for English (or any other language using 
+#  nonaccented roman alphabet) as well as general refinement.
+#------------------------------------------------------------------------------#
+#  Based off of A1 Name Window and Galv's Busts
+#------------------------------------------------------------------------------#
+# Free use though I would apreciate a free copy of your game.
+#------------------------------------------------------------------------------#
+
+($imported ||= {})["Combined_Scripts"] = true
+
+module Aelius_Bust
+  BUST_Z = -1             # Z value adjustment for busts, can be negative
+  BUST_Y_OVER = false     # Bust position setting
+  TEXT_X = 0              # Text offset when displaying busts
+  SLIDE = true            # Slide bust onto the screen
+end
+
+#Name list for all character face graphics, organized in 3 ways:
+# "[File name]_[Index]" => "Name to display"
+# "[File name]" => "Name to display" *Applies to all applicable files.
+# "Actor[ID]" *Display actor name with corresponding ID.
+# When listing file names here list them EXACTLY as the file is called.
+# Case and space sensitive.
+module NameList #update bottom namelist as well.
+  NAME_LIST = {
+    "cheshire"    => "Cheshire Cat",
+    "ノーデ"        => "White Rabbit Node",
+    "ノーデ2"       => "White Rabbit Node",
+    "nameless_girl" => "Nameless Girl",
+    "Nameless Girl" => "Nameless Girl",
+  }
+end
+
+#------------------------------------------------------------------------------#
+#Shake Attributes:
+
+#shake_direction: Can be side (left and right), up_down (up and down), or both.
+#shake_intensity: The intensity of the shake effect.
+#shake_duration: The duration of the shake effect.
+#shake_speed: The speed of the shake effect.
+#------------------------------------------------------------------------------#
+#Script Calls:
+              #Shaking:
+              #Shaking can also be used for small bust movements!
+#"$game_map.interpreter.shake_bust(:(type), (intensity), (duration), (speed)"
+#"$game_map.interpreter.shake_bust(:side, 5, 60, 2)"      Shake side to side
+#"$game_map.interpreter.shake_bust(:up_down, 5, 60, 2)"   Shake up and down
+#"$game_map.interpreter.shake_bust(:both, 5, 60, 2)"      Shake both directions
+
+              #Name Window:
+#"set_name_window_position(x, y)"
+# x=1 is left, x=0 is center.
+# y=1 is top, y=0 is above text window
+
+              #Bust:
+#bust_mirror(true/false) Mirrors the bust display to the other side and flipped.
+
+              #Animation:
+#Allows busts to play through animations. frame=animation frame, x=frame rate
+#Similar to name list, file names must be EXACT.
+#$game_map.interpreter.animate_bust(["bust_frame1", "bust_frame2", "bust_frame3"], x)
+
+#-----------------------------------------------------------------------------#
+# Busts and Name Window Control Switches
+#-----------------------------------------------------------------------------#
+#When altering switches make sure to alter them at lines 100 and 101.
+#Name Window position is altered through variables settable at lines 334&335
+#------------------------------------------------------------------------------#
+module Aelius_Bust
+  BUST_DISABLE_SWITCH = 1138   # Switch ID to disable busts
+  NAME_DISABLE_SWITCH = 1139   # Switch ID to disable name window
+end
+#------------------------------------------------------------------------------#
+# End of general settings. Switch and Variable settings are found below here.
+#-----------------------------------------------------------------------------#
+
+#-----------------------------------------------------------------------------#
+# Game_Interpreter - Added support for bust mirroring and name window
+#-----------------------------------------------------------------------------#
+class Game_Interpreter
+  def bust_mirror(state)
+    $game_message.mirror = state
+  end
+
+  alias aelius_busts_command_101 command_101
+  def command_101
+    $game_message.bust_name = @params[0]
+    $game_message.bust_index = @params[1]
+    $game_message.name_window = NameList::NAME_LIST[@params[0]] || ""
+    aelius_busts_command_101
+  end
+
+  def enable_busts
+    $game_switches[Aelius_Bust::BUST_DISABLE_SWITCH] = false
+  end
+
+  def disable_busts
+    $game_switches[Aelius_Bust::BUST_DISABLE_SWITCH] = true
+  end
+
+  def enable_name_window
+    $game_switches[Aelius_Bust::NAME_DISABLE_SWITCH] = false
+  end
+
+  def disable_name_window
+    $game_switches[Aelius_Bust::NAME_DISABLE_SWITCH] = true
+  end
+
+  def set_name_window_position(x, y)
+    $game_variables[1026] = x
+    $game_variables[1027] = y
+    #puts "Name window position set to (#{x}, #{y})"
+  end
+
+  def shake_bust(direction, intensity, duration, speed = 1)
+    $game_message.shake_direction = direction
+    $game_message.shake_intensity = intensity
+    $game_message.shake_duration = duration
+    $game_message.shake_speed = speed
+  end
+
+  def animate_bust(frames, frame_rate)
+    $game_message.animation_frames = frames
+    $game_message.animation_frame_rate = frame_rate
+    $game_message.animation_index = 0
+    $game_message.animation_duration = frames.size * frame_rate
+  end
+end
+
+#-----------------------------------------------------------------------------#
+# Game_Message - Added bust and name window attributes and clear method
+#-----------------------------------------------------------------------------#
+class Game_Message
+  attr_accessor :bust_name, :bust_index, :mirror, :name_window
+  attr_accessor :shake_direction, :shake_intensity, :shake_duration, :shake_speed
+  attr_accessor :animation_frames, :animation_frame_rate, :animation_index, :animation_duration
+  
+  alias aelius_busts_message_initialize initialize
+  def initialize
+    aelius_busts_message_initialize
+    @mirror = false
+    @name_window = ""
+    @shake_direction = nil
+    @shake_intensity = 0
+    @shake_duration = 0
+    @shake_speed = 1
+    @animation_frames = []
+    @animation_frame_rate = 0
+    @animation_index = 0
+    @animation_duration = 0
+  end
+
+  alias aelius_busts_message_clear clear
+  def clear
+    @bust_name = ""
+    @bust_index = 0
+    @name_window = ""
+    @shake_direction = nil
+    @shake_intensity = 0
+    @shake_duration = 0
+    @shake_speed = 1
+    @animation_frames = []
+    @animation_frame_rate = 0
+    @animation_index = 0
+    @animation_duration = 0
+    aelius_busts_message_clear
+  end
+end
+
+#-----------------------------------------------------------------------------#
+# Window_Message - Integrated bust display and name window functionality
+#-----------------------------------------------------------------------------#
+class Window_Message < Window_Base
+  alias aelius_busts_window_create_back_bitmap create_back_bitmap
+  def create_back_bitmap
+    @bust = Sprite.new if @bust.nil?
+    @bust.visible = true
+    @bust.opacity = 0
+    @bust.z = z + Aelius_Bust::BUST_Z
+    @shake_count = 0
+    @animation_count = 0
+    aelius_busts_window_create_back_bitmap
+    create_name_window
+  end
+  
+  alias original_initialize initialize
+  def initialize
+    original_initialize
+    create_name_window
+  end
+  
+  def create_name_window
+    @name_window = Window_Name.new
+    @name_window.z = self.z + 1
+    @name_window.visible = false  # Make sure it's hidden initially
+  end
+  
+  alias aelius_busts_window_dispose dispose
+  def dispose
+    aelius_busts_window_dispose
+    dispose_bust
+    dispose_name_window
+  end
+
+  def dispose_bust
+    @bust.dispose if !@bust.nil?
+    @bust.bitmap.dispose if !@bust.bitmap.nil?
+  end
+
+  def dispose_name_window
+    @name_window.dispose if @name_window
+  end
+  
+  alias aelius_busts_window_update_back_sprite update_back_sprite
+  def update_back_sprite
+    aelius_busts_window_update_back_sprite
+    update_bust if openness > 0
+    update_name_window
+  end
+
+  def update_bust
+    if !$game_message.bust_name.empty? && !$game_switches[Aelius_Bust::BUST_DISABLE_SWITCH]
+      @bust.mirror = $game_message.mirror
+      if $game_message.animation_frames.empty?
+        file_path = "Graphics/Pictures/#{$game_message.bust_name}-#{$game_message.bust_index + 1}"
+        #puts "Loading bust image from: #{file_path}"
+        @bust.bitmap = Cache.picture(file_path)
+      else
+        update_animation
+      end
+
+      if @bust.bitmap.nil?
+        #puts "Error: Bitmap for bust is nil"
+        return
+      end
+
+      if !$game_message.mirror
+        if Aelius_Bust::SLIDE
+          @bust.x = ((openness.to_f / 255) * @bust.width) - @bust.width
+        else
+          @bust.x = 0
+        end
+      else
+        if Aelius_Bust::SLIDE
+          @bust.x = Graphics.width - ((openness.to_f / 255) * @bust.width)
+        else
+          @bust.x = Graphics.width - @bust.bitmap.width
+        end
+      end
+      
+      if $game_message.position == 2 && !Aelius_Bust::BUST_Y_OVER
+        @bust.y = Graphics.height - @bust.bitmap.height - self.height
+      else
+        @bust.y = Graphics.height - @bust.bitmap.height
+      end
+
+      apply_shake if $game_message.shake_duration > 0
+    else
+      @bust.bitmap = nil
+    end
+    if $game_switches[Aelius_Bust::BUST_DISABLE_SWITCH]
+      @bust.opacity = 0
+    else
+      @bust.opacity = openness
+    end
+    @bust.update
+  end
+  
+  def new_line_x
+    if $game_switches[Aelius_Bust::BUST_DISABLE_SWITCH]
+      $game_message.face_name.empty? ? 0 : 112
+    else
+      if @bust.z >= self.z && !$game_message.mirror && $game_message.position == 2
+        $game_message.face_name.empty? ? 0 : @bust.bitmap.width + Aelius_Bust::TEXT_X
+      else
+        return 0
+      end
+    end
+  end
+  
+  def draw_face(face_name, face_index, x, y, enabled = true)
+    return if !$game_message.face_name.empty? && !$game_switches[Aelius_Bust::BUST_DISABLE_SWITCH]
+    super
+  end
+  
+  def update_name_window
+    if !$game_message.name_window.empty? && !$game_switches[Aelius_Bust::NAME_DISABLE_SWITCH]
+      name = $game_message.name_window
+      @name_window.name = name
+      @name_window.update_placement(self)
+      @name_window.visible = true
+      #puts "Name window updated with name: '#{name}'"
+    else
+      @name_window.visible = false
+    end
+  end
+
+  def apply_shake
+    shake_intensity = $game_message.shake_intensity
+    shake_direction = $game_message.shake_direction
+    shake_duration = $game_message.shake_duration
+    shake_speed = $game_message.shake_speed
+
+    @shake_count += 1
+    if @shake_count > shake_duration
+      @shake_count = 0
+      $game_message.shake_duration = 0
+      @bust.x -= shake_intensity if shake_direction == :side || shake_direction == :both
+      @bust.y -= shake_intensity if shake_direction == :up_down || shake_direction == :both
+    else
+      @bust.x += shake_intensity * Math.sin(@shake_count * shake_speed * 2 * Math::PI / shake_duration) if shake_direction == :side || shake_direction == :both
+      @bust.y += shake_intensity * Math.cos(@shake_count * shake_speed * 2 * Math::PI / shake_duration) if shake_direction == :up_down || shake_direction == :both
+    end
+  end
+
+  def update_animation
+    if @animation_count >= $game_message.animation_frame_rate
+      $game_message.animation_index = ($game_message.animation_index + 1) % $game_message.animation_frames.size
+      frame_name = $game_message.animation_frames[$game_message.animation_index]
+      #puts "Loading animation frame: #{frame_name}"
+      @bust.bitmap = Cache.picture(frame_name)
+      @animation_count = 0
+    else
+      @animation_count += 1
+    end
+  end
+end
+
+#-----------------------------------------------------------------------------#
+# Window_Name - Display name above message window
+#-----------------------------------------------------------------------------#
+class Window_Name < Window_Base
+  def initialize
+    super(0, 0, 160, fitting_height(1))
+    self.openness = 255
+    self.z = 200
+    @name = ""
+    create_contents
+    refresh
+  end
+
+  def name=(name)
+    @name = name
+    refresh
+  end
+
+  def refresh
+    contents.clear
+    draw_text(0, 0, contents.width, line_height, @name, 1)
+    #puts "Drawing name window with text: '#{@name}'"
+  end
+
+  def update_placement(message_window)
+    # Update position based on game variables or defaults
+    x_pos = $game_variables[1026]
+    y_pos = $game_variables[1027]
+
+    # Default values if variables are not set
+    default_x = (message_window.x + (message_window.width - self.width) / 2)
+    default_y = (message_window.y - self.height - 10)
+
+    # Use variables if set, otherwise use defaults
+    self.x = x_pos > 0 ? x_pos : default_x
+    self.y = y_pos > 0 ? y_pos : default_y
+
+    #puts "Name window position updated to (#{self.x}, #{self.y})"
+  end
+end
+
+# Name list for matching face names to displayed names
+$name_list = {
+  "cheshire"    => "Cheshire Cat",
+  "ノーデ"        => "White Rabbit Node",
+  "ノーデ2"       => "White Rabbit Node",
+  "nameless_girl" => "Nameless Girl",
+  "Nameless Girl" => "Nameless Girl",
+}

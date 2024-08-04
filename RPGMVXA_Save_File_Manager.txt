@@ -1,0 +1,108 @@
+#==============================================================================
+# ** SaveFileManager
+#------------------------------------------------------------------------------
+#  This script allows deletion and reloading of individual save files through
+#  script calls.
+#==============================================================================
+#Script Calls:
+#"SaveFileManager.delete_save_file(file_index)" Deletes specified save file.
+#"SaveFileManager.reload_save_file(file_index)" Loads specified save file.
+#"SaveFileManager.save_to_file(file_index)" Save's game on specified file.
+module SaveFileManager
+  #--------------------------------------------------------------------------
+  # * Delete Save File
+  #     file_index : the save file index (1, 2, 3, ...)
+  #--------------------------------------------------------------------------
+  def self.delete_save_file(file_index)
+    file_path = make_filename(file_index)
+    if File.exist?(file_path)
+      File.delete(file_path)
+      return true
+    else
+      return false
+    end
+  end
+
+  #--------------------------------------------------------------------------
+  # * Save to File
+  #     file_index : the save file index (1, 2, 3, ...)
+  #--------------------------------------------------------------------------
+  def self.save_to_file(file_index)
+    DataManager.save_game(file_index - 1)
+  end
+
+  #--------------------------------------------------------------------------
+  # * Reload Save File
+  #     file_index : the save file index (1, 2, 3, ...)
+  #--------------------------------------------------------------------------
+  def self.reload_save_file(file_index)
+    file_path = make_filename(file_index)
+    if File.exist?(file_path)
+      DataManager.load_game(file_index - 1)
+      SceneManager.goto(Scene_Map)
+      return true
+    else
+      return false
+    end
+  end
+
+  #--------------------------------------------------------------------------
+  # * Make Filename
+  #     file_index : the save file index (1, 2, 3, ...)
+  #--------------------------------------------------------------------------
+  def self.make_filename(file_index)
+    return sprintf("Save%02d.rvdata2", file_index)
+  end
+end
+
+#==============================================================================
+# ** Scene_Title
+#------------------------------------------------------------------------------
+#  Aliases to include delete methods in Scene_Title
+#==============================================================================
+class Scene_Title < Scene_Base
+  alias savefilemanager_create_command_window create_command_window
+
+  def create_command_window
+    savefilemanager_create_command_window
+    @command_window.set_handler(:delete_save, method(:command_delete_save))
+  end
+
+  def command_delete_save
+    SceneManager.call(Scene_DeleteSave)
+  end
+end
+
+#==============================================================================
+# ** Window_TitleCommand
+#------------------------------------------------------------------------------
+#  Aliases to include delete options in the title command window
+#==============================================================================
+class Window_TitleCommand < Window_Command
+  alias savefilemanager_make_command_list make_command_list
+
+  def make_command_list
+    savefilemanager_make_command_list
+    add_command("Delete Save", :delete_save)
+  end
+end
+
+#==============================================================================
+# ** Scene_DeleteSave
+#------------------------------------------------------------------------------
+#  Scene to handle save file deletion
+#==============================================================================
+class Scene_DeleteSave < Scene_File
+  def initialize
+    super("Delete Save")
+  end
+
+  def on_savefile_ok
+    if SaveFileManager.delete_save_file(index + 1)
+      Sound.play_ok
+    else
+      Sound.play_buzzer
+    end
+    return_scene
+  end
+end
