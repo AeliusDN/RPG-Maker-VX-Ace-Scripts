@@ -1,0 +1,228 @@
+#==============================================================================
+# ** Adrenaline and Rage Meters with Skill Link and Note Tags
+#------------------------------------------------------------------------------
+# This script adds two new status meters: "Adrenaline" and "Rage".
+# Adrenaline fills up with each attack avoided.
+# Rage fills up with each hit taken from enemies.
+# Weapons, items, and skills with <adrenaline> or <rage> note tags can 
+# manually increase the respective meters.
+# The meters can be linked to specific skills that are activated when filled.
+#==============================================================================
+
+module AdrenalineAndRage
+  # Initial values for Adrenaline and Rage
+  INITIAL_ADRENALINE = 0
+  INITIAL_RAGE = 0
+  
+  # Maximum values for Adrenaline and Rage
+  MAX_ADRENALINE = 100
+  MAX_RAGE = 100
+  
+  # Increase values
+  AVOID_INCREASE = 10
+  HIT_INCREASE = 10
+  
+  # Skills linked to the meters (set skill IDs here)
+  ADRENALINE_SKILL_ID = 1020  # Replace with actual skill ID
+  RAGE_SKILL_ID = 1005        # Replace with actual skill ID
+  
+  # Sound Effects
+  ADRENALINE_SE = RPG::SE.new("Adrenaline Full", 80, 100)  # Replace with actual SE file
+  RAGE_SE = RPG::SE.new("Rage-Full", 100, 100)  # Replace with actual SE file
+
+  # Manual position for the window (set these values as needed)
+  WINDOW_X = 65
+  WINDOW_Y = 330
+  WINDOW_WIDTH = 640  # Set the desired width
+  WINDOW_HEIGHT = 96  # Set the desired height
+
+  # Text label customization
+  ADRENALINE_LABEL_COLOR = 4  # Replace with desired color index
+  RAGE_LABEL_COLOR = 18  # Replace with desired color index
+  ADRENALINE_LABEL_X = 5
+  ADRENALINE_LABEL_Y = 0
+  RAGE_LABEL_X = 28
+  RAGE_LABEL_Y = 0
+end
+
+#==============================================================================
+# If you value your game working then do not edit anything past this point.
+#==============================================================================
+class Game_Battler < Game_BattlerBase
+  attr_accessor :adrenaline, :rage
+  
+  alias initialize_adrenaline_rage initialize
+  def initialize
+    initialize_adrenaline_rage
+    @adrenaline = AdrenalineAndRage::INITIAL_ADRENALINE
+    @rage = AdrenalineAndRage::INITIAL_RAGE
+  end
+  
+  alias item_apply_adrenaline_rage item_apply
+  def item_apply(user, item)
+    item_apply_adrenaline_rage(user, item)
+    if item.is_a?(RPG::Skill)
+      if item.id == AdrenalineAndRage::ADRENALINE_SKILL_ID
+        reset_adrenaline
+      elsif item.id == AdrenalineAndRage::RAGE_SKILL_ID
+        reset_rage
+      end
+    end
+    if self.result.hit? && self.result.hp_damage > 0
+      increase_rage
+      reset_adrenaline  # Reset adrenaline on hit
+    elsif self.result.evaded
+      increase_adrenaline
+    end
+    apply_adrenaline_rage_tags(item)
+  end
+  
+  def increase_adrenaline(amount = AdrenalineAndRage::AVOID_INCREASE)
+    previous_adrenaline = @adrenaline
+    @adrenaline += amount
+    if @adrenaline >= AdrenalineAndRage::MAX_ADRENALINE
+      @adrenaline = AdrenalineAndRage::MAX_ADRENALINE
+      play_adrenaline_full_se if previous_adrenaline < AdrenalineAndRage::MAX_ADRENALINE
+    end
+  end
+  
+  def increase_rage(amount = AdrenalineAndRage::HIT_INCREASE)
+    previous_rage = @rage
+    @rage += amount
+    if @rage >= AdrenalineAndRage::MAX_RAGE
+      @rage = AdrenalineAndRage::MAX_RAGE
+      play_rage_full_se if previous_rage < AdrenalineAndRage::MAX_RAGE
+    end
+  end
+
+  def reset_adrenaline
+    @adrenaline = AdrenalineAndRage::INITIAL_ADRENALINE
+  end
+  
+  def reset_rage
+    @rage = AdrenalineAndRage::INITIAL_RAGE
+  end
+
+  def apply_adrenaline_rage_tags(item)
+    if item.note.include?("<adrenaline>")
+      increase_adrenaline
+    elsif item.note.include?("<rage>")
+      increase_rage
+    end
+  end
+
+  def play_adrenaline_full_se
+    AdrenalineAndRage::ADRENALINE_SE.play
+  end
+
+  def play_rage_full_se
+    AdrenalineAndRage::RAGE_SE.play
+  end
+end
+
+#==============================================================================
+class Window_AdrenalineRage < Window_Base
+  def initialize
+    super(AdrenalineAndRage::WINDOW_X, AdrenalineAndRage::WINDOW_Y, AdrenalineAndRage::WINDOW_WIDTH, AdrenalineAndRage::WINDOW_HEIGHT)
+    self.opacity = 0
+    refresh
+  end
+  
+  def refresh
+    contents.clear
+    draw_adrenaline_rage_gauges
+  end
+  
+  def draw_adrenaline_rage_gauges
+    $game_party.battle_members.each_with_index do |actor, index|
+      draw_adrenaline_gauge(actor, 77, line_height * index * 2)
+      draw_rage_gauge(actor, 77, line_height * index * 2 + line_height)
+      draw_adrenaline_label(actor, 0, line_height * index * 2)
+      draw_rage_label(actor, 0, line_height * index * 2 + line_height)
+    end
+  end
+  
+  def draw_adrenaline_gauge(actor, x, y, width = 200)
+    draw_gauge(x, y, width, actor.adrenaline.to_f / AdrenalineAndRage::MAX_ADRENALINE, text_color(1), text_color(4))
+  end
+  
+  def draw_rage_gauge(actor, x, y, width = 200)
+    draw_gauge(x, y, width, actor.rage.to_f / AdrenalineAndRage::MAX_RAGE, text_color(10), text_color(18))
+  end
+
+  def draw_adrenaline_label(actor, x, y, width = 200)
+    change_color(text_color(AdrenalineAndRage::ADRENALINE_LABEL_COLOR))
+    draw_text(x + AdrenalineAndRage::ADRENALINE_LABEL_X, y + AdrenalineAndRage::ADRENALINE_LABEL_Y, width, line_height, "Adrenaline")
+  end
+
+  def draw_rage_label(actor, x, y, width = 200)
+    change_color(text_color(AdrenalineAndRage::RAGE_LABEL_COLOR))
+    draw_text(x + AdrenalineAndRage::RAGE_LABEL_X, y + AdrenalineAndRage::RAGE_LABEL_Y, width, line_height, "Rage")
+  end
+end
+
+#==============================================================================
+class Scene_Battle < Scene_Base
+  alias create_all_windows_adrenaline_rage create_all_windows
+  def create_all_windows
+    create_adrenaline_rage_viewport
+    create_all_windows_adrenaline_rage
+    create_adrenaline_rage_window
+  end
+
+  def create_adrenaline_rage_viewport
+    @adrenaline_rage_viewport = Viewport.new
+    @adrenaline_rage_viewport.z = 0  # Ensure the viewport is drawn below other windows
+  end
+
+  def create_adrenaline_rage_window
+    @adrenaline_rage_window = Window_AdrenalineRage.new
+    @adrenaline_rage_window.viewport = @adrenaline_rage_viewport
+    @adrenaline_rage_window.open
+    @adrenaline_rage_window.refresh
+  end
+  
+  alias update_for_adrenaline_rage update
+  def update
+    update_for_adrenaline_rage
+    @adrenaline_rage_window.refresh if @adrenaline_rage_window
+  end
+end
+
+#==============================================================================
+class Game_Actor < Game_Battler
+  alias usable_adrenaline_rage usable?
+  def usable?(item)
+    if item.is_a?(RPG::Skill)
+      if item.id == AdrenalineAndRage::ADRENALINE_SKILL_ID && @adrenaline < AdrenalineAndRage::MAX_ADRENALINE
+        return false
+      elsif item.id == AdrenalineAndRage::RAGE_SKILL_ID && @rage < AdrenalineAndRage::MAX_RAGE
+        return false
+      end
+    end
+    usable_adrenaline_rage(item)
+  end
+  
+  alias use_item_adrenaline_rage use_item
+  def use_item(item)
+    use_item_adrenaline_rage(item)
+    if item.is_a?(RPG::Skill)
+      if item.id == AdrenalineAndRage::ADRENALINE_SKILL_ID
+        reset_adrenaline
+      elsif item.id == AdrenalineAndRage::RAGE_SKILL_ID
+        reset_rage
+      end
+    end
+  end
+end
+
+#==============================================================================
+# ** Ensure the Adrenaline and Rage viewport is properly disposed
+#------------------------------------------------------------------------------
+class Scene_Base
+  alias terminate_adrenaline_rage terminate
+  def terminate
+    terminate_adrenaline_rage
+    @adrenaline_rage_viewport.dispose if @adrenaline_rage_viewport
+  end
+end
