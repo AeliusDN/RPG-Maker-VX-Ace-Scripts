@@ -1,0 +1,218 @@
+#==============================================================================
+# ** BGM_Display_Window
+#------------------------------------------------------------------------------
+#  This window displays the current BGM in the top right corner of the screen.
+#==============================================================================
+#  Script calls:
+#  "hide_bgm_display_window"
+#  "show_bgm_display_window"
+#==============================================================================
+#  Memo tag:
+#  Use this memo tag to specify the window's width on a per-map basis.
+#  "<BGM_Window_Width: x>"
+#  Each map must have this tag. You can use script calls to hide it though.
+#  Uncomment specific "put" commands to view window width generation in the
+#  RPG Maker VX Ace Console.
+#==============================================================================
+#  Can be disabled with switches specified at line 168
+#==============================================================================
+
+class BGM_Display_Window < Window_Base
+  FADE_DURATION = 300  # 5 seconds (60 frames per second * 5)
+
+  #--------------------------------------------------------------------------
+  # * Object Initialization
+  #--------------------------------------------------------------------------
+  def initialize
+    @bgm_name = ""
+    @fade_timer = 0
+    super(0, 0, 200, fitting_height(1))
+    self.opacity = 255
+    self.contents_opacity = 255
+    self.z = 200
+    initial_bgm_check
+    #puts "BGM_Display_Window initialized with width: #{self.width}"
+  end
+
+  #--------------------------------------------------------------------------
+  # * Initial BGM Check
+  #--------------------------------------------------------------------------
+  def initial_bgm_check
+    current_bgm = RPG::BGM.last.name
+    @bgm_name = current_bgm
+    refresh
+  end
+
+  #--------------------------------------------------------------------------
+  # * Refresh
+  #--------------------------------------------------------------------------
+  def refresh
+    contents.clear
+    text = "Current BGM: #{@bgm_name}"
+    text_width = text_size(text).width
+    window_padding = standard_padding * 2
+    memo_width = read_memo_width
+    self.width = memo_width > 0 ? memo_width : text_width + window_padding - 24  # Adjust to account for extra space
+    self.x = Graphics.width - self.width
+    create_contents
+    draw_text(0, 0, contents.width, line_height, text)
+    reset_fade_timer
+    #puts "BGM_Display_Window refreshed with text: '#{text}', text width: #{text_width}, total width: #{self.width}'"
+  end
+
+  #--------------------------------------------------------------------------
+  # * Read Memo Width
+  #--------------------------------------------------------------------------
+  def read_memo_width
+    map_id = $game_map.map_id
+    load_data(sprintf("Data/Map%03d.rvdata2", map_id)).note.match(/<BGM_Window_Width:\s*(\d+)>/i) { |match| return match[1].to_i }
+    0
+  end
+
+  #--------------------------------------------------------------------------
+  # * Update
+  #--------------------------------------------------------------------------
+  def update
+    super
+    check_bgm
+    update_fade
+  end
+
+  #--------------------------------------------------------------------------
+  # * Check BGM
+  #--------------------------------------------------------------------------
+  def check_bgm
+    current_bgm = RPG::BGM.last.name
+    if @bgm_name != current_bgm
+      @bgm_name = current_bgm
+      refresh
+      #puts "BGM changed to: #{@bgm_name}"
+    end
+  end
+
+  #--------------------------------------------------------------------------
+  # * Reset Fade Timer
+  #--------------------------------------------------------------------------
+  def reset_fade_timer
+    @fade_timer = 0
+    self.opacity = 255
+    self.contents_opacity = 255
+  end
+
+  #--------------------------------------------------------------------------
+  # * Update Fade
+  #--------------------------------------------------------------------------
+  def update_fade
+    @fade_timer += 1
+    if @fade_timer > FADE_DURATION
+      fade_amount = (255.0 / FADE_DURATION) * (@fade_timer - FADE_DURATION)
+      self.opacity = [255 - fade_amount, 0].max
+      self.contents_opacity = [255 - fade_amount, 0].max
+    end
+    if self.opacity == 0
+      self.visible = false
+    end
+  end
+end
+
+#==============================================================================
+# ** Scene_Map
+#------------------------------------------------------------------------------
+#  This class performs the map screen processing.
+#==============================================================================
+
+class Scene_Map < Scene_Base
+  alias_method :bgm_display_start, :start
+  alias_method :bgm_display_update, :update
+  alias_method :bgm_display_post_transfer, :post_transfer
+  alias_method :bgm_display_pre_terminate, :pre_terminate
+
+  #--------------------------------------------------------------------------
+  # * Start Processing
+  #--------------------------------------------------------------------------
+  def start
+    bgm_display_start
+    #puts "Scene_Map start"
+  end
+
+  #--------------------------------------------------------------------------
+  # * Post-Transfer Processing
+  #--------------------------------------------------------------------------
+  def post_transfer
+    bgm_display_post_transfer
+    #puts "Scene_Map post_transfer"
+    $bgm_display_window_created = false
+    create_bgm_display_window unless $bgm_display_window_created
+  end
+
+  #--------------------------------------------------------------------------
+  # * Update Frame
+  #--------------------------------------------------------------------------
+  def update
+    bgm_display_update
+    @bgm_display_window.update if @bgm_display_window && !@bgm_display_window.disposed?
+  end
+
+  #--------------------------------------------------------------------------
+  # * Pre-Terminate Processing
+  #--------------------------------------------------------------------------
+  def pre_terminate
+    bgm_display_pre_terminate
+    #puts "Scene_Map pre_terminate"
+  end
+
+  #--------------------------------------------------------------------------
+  # * Create BGM Display Window
+  #--------------------------------------------------------------------------
+  def create_bgm_display_window
+    if $game_switches[1141] # Switch ID 1141 to disable script
+      @bgm_display_window = nil
+      #puts "BGM Display Window creation skipped due to switch 1141"
+    else
+      @bgm_display_window = BGM_Display_Window.new
+      $bgm_display_window_created = true
+      #puts "BGM Display Window created"
+    end
+  end
+
+  #--------------------------------------------------------------------------
+  # * Hide BGM Display Window
+  #--------------------------------------------------------------------------
+  def hide_bgm_display_window
+    @bgm_display_window.visible = false if @bgm_display_window
+    #puts "BGM Display Window hidden"
+  end
+
+  #--------------------------------------------------------------------------
+  # * Show BGM Display Window
+  #--------------------------------------------------------------------------
+  def show_bgm_display_window
+    if @bgm_display_window
+      @bgm_display_window.visible = true
+      @bgm_display_window.reset_fade_timer
+      #puts "BGM Display Window shown"
+    end
+  end
+end
+
+#==============================================================================
+# ** Script Call Methods
+#------------------------------------------------------------------------------
+#  These methods can be used to hide/show the BGM display window.
+#==============================================================================
+
+class Game_Interpreter
+  #--------------------------------------------------------------------------
+  # * Hide BGM Display Window
+  #--------------------------------------------------------------------------
+  def hide_bgm_display_window
+    SceneManager.scene.hide_bgm_display_window if SceneManager.scene.is_a?(Scene_Map)
+  end
+
+  #--------------------------------------------------------------------------
+  # * Show BGM Display Window
+  #--------------------------------------------------------------------------
+  def show_bgm_display_window
+    SceneManager.scene.show_bgm_display_window if SceneManager.scene.is_a?(Scene_Map)
+  end
+end
