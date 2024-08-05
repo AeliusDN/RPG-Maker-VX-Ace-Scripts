@@ -1,0 +1,206 @@
+#==============================================================================
+# ** Floating Dialogue
+#------------------------------------------------------------------------------
+#  This script displays a short text box above events. With configurable
+#  duration, fade speed, width, height, y offset, script calls for positioning,
+#  usable switches, and text code integration.
+#==============================================================================
+#  Script Calls:
+#  "$game_map.events[EVENT_ID].set_text_offset(X_OFFSET, Y_OFFSET)"
+#  Replace event ID with the ID of the event (ie. EVO1 is written simply as 1)
+#  Adjust x and y offset occordingly. Negative y values are up and negative x
+#  values are left.
+#==============================================================================
+
+module EventTextConfig
+  TEXT_DURATION = 150   # Duration in frames (60 frames = 1 second)
+  FADE_SPEED = 5        # Speed at which the text fades out
+  MAX_WIDTH = 320       # Maximum width of the text box
+  MAX_HEIGHT = 64       # Maximum height of the text box
+  MIN_Y_OFFSET = 32     # Minimum Y offset for the text box
+  ENABLE_SWITCH = 1140     # ID of the switch to enable/disable the script
+end
+
+class Sprite_EventText < Sprite
+  attr_accessor :text, :x_offset, :y_offset
+  
+  def initialize(viewport, event)
+    super(viewport)
+    @event = event
+    @text = ""
+    @opacity_timer = 0
+    @x_offset = 0
+    @y_offset = 0
+    create_bitmap
+  end
+
+  def create_bitmap
+    self.bitmap = Bitmap.new(EventTextConfig::MAX_WIDTH, EventTextConfig::MAX_HEIGHT)
+    refresh
+  end
+
+  def refresh
+    return unless $game_switches[EventTextConfig::ENABLE_SWITCH]
+    draw_text_with_codes
+    self.opacity = 255
+    @opacity_timer = EventTextConfig::TEXT_DURATION
+  end
+
+  def draw_text_with_codes
+    dummy_window = Window_Base.new(0, 0, EventTextConfig::MAX_WIDTH, EventTextConfig::MAX_HEIGHT)
+    dummy_bitmap = Bitmap.new(EventTextConfig::MAX_WIDTH, EventTextConfig::MAX_HEIGHT)
+    dummy_window.contents = dummy_bitmap
+    dummy_window.draw_text_ex(0, 0, @text)
+    text_width = [dummy_window.contents.text_size(@text).width + 20, EventTextConfig::MAX_WIDTH].min
+    text_height = [dummy_window.contents.text_size(@text).height + 20, EventTextConfig::MAX_HEIGHT].min
+    self.bitmap.dispose if self.bitmap
+    self.bitmap = Bitmap.new(text_width, text_height)
+    self.bitmap.font.size = 16
+    self.bitmap.font.color = Color.new(255, 255, 255)
+    self.bitmap.blt(0, 0, dummy_bitmap, dummy_bitmap.rect)
+    dummy_window.dispose
+    dummy_bitmap.dispose
+  end
+
+  def update
+    super
+    return unless $game_switches[EventTextConfig::ENABLE_SWITCH]
+    self.x = @event.screen_x - self.bitmap.width / 2 + @x_offset
+    self.y = @event.screen_y - EventTextConfig::MIN_Y_OFFSET - self.bitmap.height / 2 + @y_offset
+    update_fade
+  end
+
+  def update_fade
+    if @opacity_timer > 0
+      @opacity_timer -= 1
+    elsif @opacity_timer == 0 && self.opacity > 0
+      self.opacity -= EventTextConfig::FADE_SPEED
+    end
+  end
+end
+
+class Game_Event < Game_Character
+  attr_accessor :text_sprite
+  
+  alias original_initialize initialize
+  def initialize(map_id, event)
+    original_initialize(map_id, event)
+    @text_sprite = nil
+  end
+
+  def display_text(text)
+    return unless $game_switches[EventTextConfig::ENABLE_SWITCH]
+    if @text_sprite
+      @text_sprite.text = text
+      @text_sprite.refresh
+    end
+  end
+
+  def clear_text
+    if @text_sprite
+      @text_sprite.text = ""
+      @text_sprite.refresh
+    end
+  end
+
+  def set_text_offset(x_offset, y_offset)
+    if @text_sprite
+      @text_sprite.x_offset = x_offset
+      @text_sprite.y_offset = y_offset
+    end
+  end
+end
+
+class Spriteset_Map
+  alias original_initialize initialize
+  def initialize
+    original_initialize
+    create_event_text_viewport
+    create_event_text_sprites if $game_map.events
+  end
+
+  def create_event_text_viewport
+    @event_text_viewport = Viewport.new(0, 0, Graphics.width, Graphics.height)
+    @event_text_viewport.z = 200
+  end
+
+  def create_event_text_sprites
+    @event_text_sprites = []
+    $game_map.events.each_value do |event|
+      sprite = Sprite_EventText.new(@event_text_viewport, event)
+      @event_text_sprites.push(sprite)
+      event.text_sprite = sprite
+    end
+  end
+
+  alias original_update update
+  def update
+    original_update
+    update_event_text_sprites if @event_text_sprites && $game_switches[EventTextConfig::ENABLE_SWITCH]
+  end
+
+  def update_event_text_sprites
+    @event_text_sprites.each do |sprite|
+      sprite.update
+    end
+  end
+
+  alias original_dispose dispose
+  def dispose
+    dispose_event_text_sprites if @event_text_sprites
+    @event_text_viewport.dispose if @event_text_viewport
+    original_dispose
+  end
+
+  def dispose_event_text_sprites
+    @event_text_sprites.each do |sprite|
+      sprite.dispose
+    end
+  end
+end
+
+class Window_Message < Window_Base
+  alias original_update update
+  def update
+    if $game_message.event_id > 0 && !$game_message.texts.empty? && $game_switches[EventTextConfig::ENABLE_SWITCH]
+      event = $game_map.events[$game_message.event_id]
+      event.display_text($game_message.texts.join("\n")) if event
+      $game_message.clear
+    end
+    original_update
+  end
+
+  alias original_close close
+  def close
+    if $game_message.event_id > 0
+      event = $game_map.events[$game_message.event_id]
+      event.clear_text if event
+      $game_message.event_id = 0
+    end
+    original_close
+  end
+end
+
+class Game_Message
+  attr_accessor :event_id
+  
+  alias original_initialize initialize
+  def initialize
+    original_initialize
+    @event_id = 0
+  end
+
+  alias original_clear clear
+  def clear
+    original_clear
+    @event_id = 0
+  end
+end
+
+class Game_Interpreter
+  alias original_command_101 command_101
+  def command_101
+    $game_message.event_id = @event_id
+    original_command_101
+  end
+end
