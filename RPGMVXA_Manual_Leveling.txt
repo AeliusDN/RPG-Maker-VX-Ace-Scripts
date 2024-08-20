@@ -1,0 +1,160 @@
+module MLV_CHANGE
+  LVDRW  = 8
+
+  MANUAL_STAT_INTERVAL = 50
+
+  MANUAL_STAT_SETTINGS = {
+    50 => { :mhp => 10000, :mmp => 1000, :atk => 500, :def => 500, :mag => 500, :mdf => 500, :agi => 500, :luk => 500 },
+    100 => { :mhp => 25000, :mmp => 5000, :atk => 650, :def => 650, :mag => 650, :mdf => 650, :agi => 650, :luk => 650 },
+    150 => { :mhp => 40000, :mmp => 12500, :atk => 800, :def => 800, :mag => 800, :mdf => 800, :agi => 800, :luk => 800 },
+    200 => { :mhp => 60000, :mmp => 20000, :atk => 1000, :def => 1000, :mag => 1000, :mdf => 1000, :agi => 1000, :luk => 1000 },
+    250 => { :mhp => 80000, :mmp => 30000, :atk => 1200, :def => 1200, :mag => 1200, :mdf => 1200, :agi => 1200, :luk => 1200 },
+    300 => { :mhp => 105000, :mmp => 40000, :atk => 1450, :def => 1450, :mag => 1450, :mdf => 1450, :agi => 1450, :luk => 1450 },
+    350 => { :mhp => 130000, :mmp => 52500, :atk => 1700, :def => 1700, :mag => 1700, :mdf => 1700, :agi => 1700, :luk => 1700 },
+    400 => { :mhp => 160000, :mmp => 65000, :atk => 2000, :def => 2000, :mag => 2000, :mdf => 2000, :agi => 2000, :luk => 2000 },
+    450 => { :mhp => 190000, :mmp => 80000, :atk => 2300, :def => 2300, :mag => 2300, :mdf => 2300, :agi => 2300, :luk => 2300 },
+    500 => { :mhp => 225000, :mmp => 95000, :atk => 2650, :def => 2650, :mag => 2650, :mdf => 2650, :agi => 2650, :luk => 2650 },
+    550 => { :mhp => 260000, :mmp => 112500, :atk => 3000, :def => 3000, :mag => 3000, :mdf => 3000, :agi => 3000, :luk => 3000 },
+    600 => { :mhp => 300000, :mmp => 130000, :atk => 3400, :def => 3400, :mag => 3400, :mdf => 3400, :agi => 3400, :luk => 3400 },
+    650 => { :mhp => 340000, :mmp => 150000, :atk => 3800, :def => 3800, :mag => 3800, :mdf => 3800, :agi => 3800, :luk => 3800 },
+    700 => { :mhp => 385000, :mmp => 170000, :atk => 4250, :def => 4250, :mag => 4250, :mdf => 4250, :agi => 4250, :luk => 4250 },
+    750 => { :mhp => 430000, :mmp => 192500, :atk => 4700, :def => 4700, :mag => 4700, :mdf => 4700, :agi => 4700, :luk => 4700 },
+    800 => { :mhp => 480000, :mmp => 215000, :atk => 5200, :def => 5200, :mag => 5200, :mdf => 5200, :agi => 5200, :luk => 5200 },
+    850 => { :mhp => 530000, :mmp => 240000, :atk => 5700, :def => 5700, :mag => 5700, :mdf => 5700, :agi => 5700, :luk => 5700 },
+    900 => { :mhp => 585000, :mmp => 265000, :atk => 6250, :def => 6250, :mag => 6250, :mdf => 6250, :agi => 6250, :luk => 6250 },
+    950 => { :mhp => 640000, :mmp => 292500, :atk => 6800, :def => 6800, :mag => 6800, :mdf => 6800, :agi => 6800, :luk => 6800 },
+    1000 => { :mhp => 700000, :mmp => 325000, :atk => 7000, :def => 7000, :mag => 7000, :mdf => 7000, :agi => 7000, :luk => 7000 }
+    # Add more levels and stats as needed
+  }
+
+  TAG_MANUAL_STAT_GROWTH = "<ManualStatGrowth>"
+  TAG_MAX_LEVEL_INCREASE = /<MaxLevelIncrease:\s*(\d+)>/
+end
+
+class RPG::BaseItem
+  def mlv_plus
+    @mlv_plus ||= begin
+      value = 0
+      self.note.scan(MLV_CHANGE::TAG_MAX_LEVEL_INCREASE).each do |match|
+        value += match[0].to_i
+      end
+      value
+    end
+  end
+end
+
+class RPG::Class < RPG::BaseItem
+  def manual_stat_growth?
+    self.note.include?(MLV_CHANGE::TAG_MANUAL_STAT_GROWTH)
+  end
+end
+
+class Game_Actor < Game_Battler
+  alias param_base_lb param_base
+  def param_base(param_id)
+    if actor_class_has_manual_stat_growth?
+      if MLV_CHANGE::MANUAL_STAT_SETTINGS.keys.include?(@level)
+        manual_stat_value = apply_manual_stat_settings(param_id)
+      else
+        manual_stat_value = interpolate_stats(param_id)
+      end
+      return apply_clamp(manual_stat_value, 1, param_max(param_id))
+    end
+    apply_clamp(param_base_lb(param_id), 1, param_max(param_id))
+  end
+
+  alias max_level_lb max_level
+  def max_level
+    base_max_level = max_level_lb
+    base_max_level + level_bonus
+  end
+
+  def level_bonus
+    bonus = 0
+    feature_objects.each do |obj|
+      bonus += obj.mlv_plus
+    end
+    bonus || 0
+  end
+
+  def actor_class_has_manual_stat_growth?
+    self.class.manual_stat_growth?
+  end
+
+  def apply_manual_stat_settings(param_id)
+    settings = MLV_CHANGE::MANUAL_STAT_SETTINGS[@level]
+    return settings[stat_id_to_symbol(param_id)] if settings && stat_id_to_symbol(param_id)
+    param_base_lb(param_id)
+  end
+
+  def interpolate_stats(param_id)
+    prev_level, next_level = find_adjacent_levels(@level)
+    return param_base_lb(param_id) if prev_level.nil? || next_level.nil?
+
+    prev_stats = MLV_CHANGE::MANUAL_STAT_SETTINGS[prev_level]
+    next_stats = MLV_CHANGE::MANUAL_STAT_SETTINGS[next_level]
+
+    stat_symbol = stat_id_to_symbol(param_id)
+    return param_base_lb(param_id) if stat_symbol.nil?
+
+    prev_value = prev_stats[stat_symbol]
+    next_value = next_stats[stat_symbol]
+
+    interpolated_value = interpolate_value(prev_value, next_value, prev_level, next_level, @level)
+    interpolated_value
+  end
+
+  def find_adjacent_levels(level)
+    levels = MLV_CHANGE::MANUAL_STAT_SETTINGS.keys.sort
+    prev_level = levels.select { |lvl| lvl <= level }.max
+    next_level = levels.select { |lvl| lvl >= level }.min
+
+    return prev_level, next_level
+  end
+
+  def interpolate_value(prev_value, next_value, prev_level, next_level, current_level)
+    total_levels = next_level - prev_level
+    levels_passed = current_level - prev_level
+    ratio = levels_passed.to_f / total_levels
+    interpolated_value = prev_value + (next_value - prev_value) * ratio
+    interpolated_value.to_i
+  end
+
+  def stat_id_to_symbol(param_id)
+    case param_id
+    when 0
+      :mhp
+    when 1
+      :mmp
+    when 2
+      :atk
+    when 3
+      :def
+    when 4
+      :mag
+    when 5
+      :mdf
+    when 6
+      :agi
+    when 7
+      :luk
+    else
+      nil
+    end
+  end
+
+  def apply_clamp(value, min, max)
+    [[value, max].min, min].max
+  end
+end
+
+if MLV_CHANGE::LVDRW > 0
+  class Window_Base < Window
+    def draw_actor_level(actor, x, y)
+      change_color(system_color)
+      draw_text(x, y, 32, line_height, Vocab::level_a)
+      change_color(normal_color)
+      draw_text(x + 32 - MLV_CHANGE::LVDRW, y, 24 + MLV_CHANGE::LVDRW, line_height, actor.level, 2)
+    end
+  end
+end
