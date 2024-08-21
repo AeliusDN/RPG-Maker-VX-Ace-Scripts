@@ -24,7 +24,6 @@ module MLV_CHANGE
     900 => { :mhp => 585000, :mmp => 265000, :atk => 6250, :def => 6250, :mag => 6250, :mdf => 6250, :agi => 6250, :luk => 6250 },
     950 => { :mhp => 640000, :mmp => 292500, :atk => 6800, :def => 6800, :mag => 6800, :mdf => 6800, :agi => 6800, :luk => 6800 },
     1000 => { :mhp => 700000, :mmp => 325000, :atk => 7000, :def => 7000, :mag => 7000, :mdf => 7000, :agi => 7000, :luk => 7000 }
-    # Add more levels and stats as needed
   }
 
   TAG_MANUAL_STAT_GROWTH = "<ManualStatGrowth>"
@@ -49,7 +48,53 @@ class RPG::Class < RPG::BaseItem
   end
 end
 
+class Game_BattlerBase
+  def param_max(param_id)
+    case param_id
+    when 0  # MHP
+      return 1000000  # Maximum HP
+    when 1  # MMP
+      return 100000   # Maximum MP
+    when 2  # ATK
+      return 10000    # Maximum Attack
+    when 3  # DEF
+      return 10000    # Maximum Defense
+    when 4  # MAG
+      return 10000    # Maximum Magic Attack
+    when 5  # MDF
+      return 10000    # Maximum Magic Defense
+    when 6  # AGI
+      return 10000    # Maximum Agility
+    when 7  # LUK
+      return 10000    # Maximum Luck
+    else
+      return 10000    # Default maximum for other parameters
+    end
+  end
+end
+
 class Game_Actor < Game_Battler
+  # Override to allow higher MHP values
+  def param_max(param_id)
+    if param_id == 0 # MHP
+      return 1000000  # Set this to your desired max HP limit
+    else
+      super
+    end
+  end
+
+  def mhp
+    mhp_value = interpolate_stats(0) # Directly using the interpolated value without clamping
+    puts "Debug: Actor #{self.name}, Calculated MHP: #{mhp_value}, Max HP: #{param_max(0)}"
+    mhp_value
+  end
+
+  def hp=(value)
+    value = apply_clamp(value, 0, mhp) # Ensure HP is clamped correctly but not MHP
+    super(value)
+    puts "Setting HP: #{value}, Max HP: #{mhp}"
+  end
+  
   alias param_base_lb param_base
   def param_base(param_id)
     if actor_class_has_manual_stat_growth?
@@ -60,13 +105,16 @@ class Game_Actor < Game_Battler
       end
       return apply_clamp(manual_stat_value, 1, param_max(param_id))
     end
-    apply_clamp(param_base_lb(param_id), 1, param_max(param_id))
+
+    return apply_clamp(param_base_lb(param_id), 1, param_max(param_id))
   end
 
   alias max_level_lb max_level
   def max_level
     base_max_level = max_level_lb
-    base_max_level + level_bonus
+    total_max_level = base_max_level + level_bonus
+    puts "Actor: #{self.name}, Base Max Level: #{base_max_level}, Bonus: #{level_bonus}, Total Max Level: #{total_max_level}"
+    total_max_level
   end
 
   def level_bonus
@@ -100,8 +148,18 @@ class Game_Actor < Game_Battler
     prev_value = prev_stats[stat_symbol]
     next_value = next_stats[stat_symbol]
 
-    interpolated_value = interpolate_value(prev_value, next_value, prev_level, next_level, @level)
-    interpolated_value
+    total_levels = next_level - prev_level
+    if total_levels <= 0
+      puts "Interpolation Error: total_levels is zero or negative"
+      return prev_value # Fallback to prevent errors
+    end
+
+    levels_passed = @level - prev_level
+    ratio = levels_passed.to_f / total_levels
+
+    interpolated_value = prev_value + (next_value - prev_value) * ratio
+    puts "Actor: #{self.name}, Level: #{@level}, Stat: #{stat_symbol}, Interpolated Value: #{interpolated_value}, Prev Level: #{prev_level}, Next Level: #{next_level}"
+    interpolated_value.to_i
   end
 
   def find_adjacent_levels(level)
@@ -110,14 +168,6 @@ class Game_Actor < Game_Battler
     next_level = levels.select { |lvl| lvl >= level }.min
 
     return prev_level, next_level
-  end
-
-  def interpolate_value(prev_value, next_value, prev_level, next_level, current_level)
-    total_levels = next_level - prev_level
-    levels_passed = current_level - prev_level
-    ratio = levels_passed.to_f / total_levels
-    interpolated_value = prev_value + (next_value - prev_value) * ratio
-    interpolated_value.to_i
   end
 
   def stat_id_to_symbol(param_id)
@@ -145,6 +195,19 @@ class Game_Actor < Game_Battler
 
   def apply_clamp(value, min, max)
     [[value, max].min, min].max
+  end
+
+  # Override the base mhp calculation
+  def mhp
+    mhp_value = apply_clamp(interpolate_stats(0), 1, param_max(0))
+    puts "Debug: Actor #{self.name}, Calculated MHP: #{mhp_value}, Max HP: #{param_max(0)}"
+    mhp_value
+  end
+
+  def hp=(value)
+    value = apply_clamp(value, 0, mhp)
+    super(value)
+    puts "Setting HP: #{value}, Max HP: #{mhp}"
   end
 end
 
