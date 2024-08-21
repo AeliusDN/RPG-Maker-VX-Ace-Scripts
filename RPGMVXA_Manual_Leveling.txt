@@ -85,14 +85,14 @@ class Game_Actor < Game_Battler
 
   def mhp
     mhp_value = interpolate_stats(0) # Directly using the interpolated value without clamping
-    puts "Debug: Actor #{self.name}, Calculated MHP: #{mhp_value}, Max HP: #{param_max(0)}"
+    #puts "Debug: Actor #{self.name}, Calculated MHP: #{mhp_value}, Max HP: #{param_max(0)}"
     mhp_value
   end
 
   def hp=(value)
     value = apply_clamp(value, 0, mhp) # Ensure HP is clamped correctly but not MHP
     super(value)
-    puts "Setting HP: #{value}, Max HP: #{mhp}"
+    #puts "Setting HP: #{value}, Max HP: #{mhp}"
   end
   
   alias param_base_lb param_base
@@ -113,7 +113,7 @@ class Game_Actor < Game_Battler
   def max_level
     base_max_level = max_level_lb
     total_max_level = base_max_level + level_bonus
-    puts "Actor: #{self.name}, Base Max Level: #{base_max_level}, Bonus: #{level_bonus}, Total Max Level: #{total_max_level}"
+    #puts "Actor: #{self.name}, Base Max Level: #{base_max_level}, Bonus: #{level_bonus}, Total Max Level: #{total_max_level}"
     total_max_level
   end
 
@@ -150,7 +150,7 @@ class Game_Actor < Game_Battler
 
     total_levels = next_level - prev_level
     if total_levels <= 0
-      puts "Interpolation Error: total_levels is zero or negative"
+      #puts "Interpolation Error: total_levels is zero or negative"
       return prev_value # Fallback to prevent errors
     end
 
@@ -158,7 +158,7 @@ class Game_Actor < Game_Battler
     ratio = levels_passed.to_f / total_levels
 
     interpolated_value = prev_value + (next_value - prev_value) * ratio
-    puts "Actor: #{self.name}, Level: #{@level}, Stat: #{stat_symbol}, Interpolated Value: #{interpolated_value}, Prev Level: #{prev_level}, Next Level: #{next_level}"
+    #puts "Actor: #{self.name}, Level: #{@level}, Stat: #{stat_symbol}, Interpolated Value: #{interpolated_value}, Prev Level: #{prev_level}, Next Level: #{next_level}"
     interpolated_value.to_i
   end
 
@@ -200,14 +200,14 @@ class Game_Actor < Game_Battler
   # Override the base mhp calculation
   def mhp
     mhp_value = apply_clamp(interpolate_stats(0), 1, param_max(0))
-    puts "Debug: Actor #{self.name}, Calculated MHP: #{mhp_value}, Max HP: #{param_max(0)}"
+    #puts "Debug: Actor #{self.name}, Calculated MHP: #{mhp_value}, Max HP: #{param_max(0)}"
     mhp_value
   end
 
   def hp=(value)
     value = apply_clamp(value, 0, mhp)
     super(value)
-    puts "Setting HP: #{value}, Max HP: #{mhp}"
+    #puts "Setting HP: #{value}, Max HP: #{mhp}"
   end
 end
 
