@@ -1,0 +1,67 @@
+#============================================================================== 
+# RPG Maker VX Ace - Enhanced Stat Overrides with Debugging
+# Author: AeliusDN
+# Description: Ensures that param_base is correctly overridden and used.
+#==============================================================================
+
+module EnemyStatOverrides
+  TAGS = {
+    mhp: "mhp_override",
+    mmp: "mmp_override",
+    atk: "atk_override",
+    def: "def_override",
+    mag: "mag_override",
+    mdf: "mdf_override",
+    agi: "agi_override",
+    luk: "luk_override"
+  }
+  
+  def self.load_stat_from_note_or_default(enemy, stat, default)
+    tag_name = TAGS[stat]
+    if enemy.note =~ /<#{tag_name}:\s*(\d+)>/i
+      #puts "Loaded #{stat.to_s.upcase} override: #{$1}"  # Debug print statement
+      $1.to_i
+    else
+      #puts "No override found for #{stat.to_s.upcase}, using default: #{default}"  # Debug print statement
+      default
+    end
+  end
+end
+
+class Game_Enemy < Game_Battler
+  alias_method :original_param_base, :param_base
+
+  def param_base(param_id)
+    #puts "Custom param_base called for param_id: #{param_id}"  # Debug print statement
+    case param_id
+    when 0 # MHP
+      EnemyStatOverrides.load_stat_from_note_or_default(enemy, :mhp, original_param_base(param_id))
+    when 1 # MMP
+      EnemyStatOverrides.load_stat_from_note_or_default(enemy, :mmp, original_param_base(param_id))
+    when 2 # ATK
+      EnemyStatOverrides.load_stat_from_note_or_default(enemy, :atk, original_param_base(param_id))
+    when 3 # DEF
+      EnemyStatOverrides.load_stat_from_note_or_default(enemy, :def, original_param_base(param_id))
+    when 4 # MAG
+      EnemyStatOverrides.load_stat_from_note_or_default(enemy, :mag, original_param_base(param_id))
+    when 5 # MDF
+      EnemyStatOverrides.load_stat_from_note_or_default(enemy, :mdf, original_param_base(param_id))
+    when 6 # AGI
+      EnemyStatOverrides.load_stat_from_note_or_default(enemy, :agi, original_param_base(param_id))
+    when 7 # LUK
+      EnemyStatOverrides.load_stat_from_note_or_default(enemy, :luk, original_param_base(param_id))
+    else
+      original_param_base(param_id)
+    end
+  end
+end
+
+class Game_BattlerBase
+  def param_max(param_id)
+    case param_id
+    when 0; 99999999  # MHP
+    when 1; 99999999  # MMP
+    else; 99999       # Other stats
+    end
+  end
+end
