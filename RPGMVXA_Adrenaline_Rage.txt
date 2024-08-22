@@ -31,7 +31,7 @@ module AdrenalineAndRage
   RAGE_SE = RPG::SE.new("Rage-Full", 100, 100)  # Replace with actual SE file
 
   # Manual position for the window (set these values as needed)
-  WINDOW_X = 65
+  WINDOW_X = 0
   WINDOW_Y = 330
   WINDOW_WIDTH = 640  # Set the desired width
   WINDOW_HEIGHT = 96  # Set the desired height
