@@ -1,12 +1,12 @@
 #==============================================================================
-# **Bleed and Hemorrage Effects
+# ** Bleed and Hemorrhage Effects
 #------------------------------------------------------------------------------
 # Applies a bleed count meter to each enemy which fills when attacks labelled
 # "Bleed" hit. This meter can be filled up to 5 times with separate states.
 #==============================================================================
 # Insert "<Bleed>" notetag into memo field of an attack to fill bleed meter.
 #==============================================================================
-# **Game_Enemy
+# ** Game_Enemy
 #==============================================================================
 class Game_Enemy < Game_Battler
   attr_accessor :bleed_count, :bleed_stack
@@ -17,12 +17,10 @@ class Game_Enemy < Game_Battler
     initialize_bleed(index, enemy_id)
     @bleed_count = 0
     @bleed_stack = 0
-    #puts "Initialized Game_Enemy with bleed_count #{@bleed_count} and bleed_stack #{@bleed_stack}"
   end
 
   def add_bleed
     @bleed_count += 1
-    #puts "Bleed count for #{self.name} increased to #{@bleed_count}"
     if @bleed_count >= 5
       @bleed_stack += 1
       apply_bleed_effect
@@ -34,85 +32,137 @@ class Game_Enemy < Game_Battler
     remove_all_bleed_states
     state_id = BLEED_STATE_IDS[[@bleed_stack - 1, 4].min] # Get the state ID based on the current stack
     add_state(state_id)
-    #puts "Applied state #{state_id} to #{self.name} with bleed_stack #{@bleed_stack}"
   end
 
   def remove_all_bleed_states
     BLEED_STATE_IDS.each { |state_id| remove_state(state_id) }
-    #puts "Removed all bleed states from #{self.name}"
   end
 end
 
 #==============================================================================
-# **Game_Battler
+# ** Game_Battler
 #==============================================================================
 class Game_Battler < Game_BattlerBase
   alias item_apply_bleed item_apply
   def item_apply(user, item)
     item_apply_bleed(user, item)
-    if item.note.include?("<Bleed>")
-      #puts "Bleed note found in item: #{item.name}"
+    if bleed_enabled?(user, item)
       if self.is_a?(Game_Enemy)
         self.add_bleed
       end
-    else
-      #puts "No bleed note found in item: #{item.name}"
     end
+  end
+
+  def bleed_enabled?(user, item)
+    return false unless item.note.include?("<Bleed>")
+
+    if user.actor?
+      return user.weapons.any? { |weapon| weapon.note.include?("<Bleed>") }
+    end
+
+    true
   end
 end
 
 #==============================================================================
-# **Window_BeedMeter
+# ** Window_BleedMeters
 #==============================================================================
-class Window_BleedMeter < Window_Base
-  BLEED_BAR_THICKNESS = 25  # Adjust this value to change the thickness of the bleed bar
-  BLEED_LABEL_WIDTH = 100   # Adjust this value to change the width of the bleed label
-  BLEED_LABEL_HEIGHT = 24   # Height of the label area
+class Window_BleedMeters < Window_Base
+  BLEED_BAR_WIDTH = 15        # Width of the bleed bar
+  BLEED_BAR_HEIGHT = 50      # Height of the bleed bar
+  BLEED_BAR_OFFSET_X = 50    # X offset relative to the enemy sprite
+  BLEED_BAR_OFFSET_Y = 0   # Y offset relative to the enemy sprite
+  BLEED_BORDER_OFFSET_X = 0  # X offset for the border relative to the bleed meter
+  BLEED_BORDER_OFFSET_Y = 15  # Y offset for the border relative to the bleed meter
+  BLEED_LABEL_WIDTH = 50     # Width of the bleed label
+  BLEED_LABEL_HEIGHT = 16    # Height of the bleed label area
+  BLEED_BORDER_GRAPHIC = "BleedOutline" # Filename of the border graphic
+  BLEED_LABEL_COLOR = Color.new(255, 255, 255) # Default color for the bleed label
+  BLEED_LABEL_OPACITY = 0  # Opacity of the bleed label (0-255)
 
-  def initialize(x, y, enemy)
-    width = [BLEED_BAR_THICKNESS + 10, BLEED_LABEL_WIDTH].max  # Adjusted for padding
-    height = 140  # Height to accommodate both the label and the bar
-    super(x, y, width, height)
-    @enemy = enemy
+  def initialize
+    super(0, 0, Graphics.width, Graphics.height)
     self.opacity = 0  # Set window opacity to 0 to make the background invisible
-    self.z = -0  # Ensure the window is under other windows
+    self.z = 2  # Ensure visibility, adjust as needed
     refresh
   end
 
   def refresh
     contents.clear
-    draw_bleed_label
-    draw_bleed_meter(5, BLEED_LABEL_HEIGHT + 5, BLEED_BAR_THICKNESS, contents_height - BLEED_LABEL_HEIGHT - 10, @enemy.bleed_count)
+    return unless player_has_bleed_weapon?
+
+    $game_troop.alive_members.each do |enemy|
+      draw_bleed_meter_for_enemy(enemy)
+    end
   end
 
-  def draw_bleed_label
-    contents.draw_text(5, 95, BLEED_LABEL_WIDTH, BLEED_LABEL_HEIGHT, "Bleed", 1)  # Center-aligned text
+  def player_has_bleed_weapon?
+    $game_party.members.any? do |actor|
+      actor.weapons.any? { |weapon| weapon.note.include?("<Bleed>") }
+    end
+  end
+
+  def draw_bleed_meter_for_enemy(enemy)
+    sprite = find_enemy_sprite(enemy)
+    return unless sprite && sprite.visible
+
+    # Calculate positions relative to the enemy sprite
+    meter_x = sprite.x + BLEED_BAR_OFFSET_X
+    meter_y = sprite.y + BLEED_BAR_OFFSET_Y
+
+    border_x = meter_x + BLEED_BORDER_OFFSET_X
+    border_y = meter_y + BLEED_BORDER_OFFSET_Y
+
+    # Debugging output to console
+    puts "Drawing bleed meter for #{enemy.name} at (#{meter_x}, #{meter_y}) with border at (#{border_x}, #{border_y})"
+
+    # Draw the bleed meter elements
+    draw_bleed_meter(meter_x, meter_y + BLEED_LABEL_HEIGHT, BLEED_BAR_WIDTH, BLEED_BAR_HEIGHT, enemy.bleed_count)
+    draw_bleed_border(border_x, border_y)
+    draw_bleed_label(meter_x, meter_y)
+  end
+
+  def draw_bleed_border(x, y)
+    border_bitmap = Cache.picture(BLEED_BORDER_GRAPHIC)
+    contents.blt(x - 3, y - 3, border_bitmap, border_bitmap.rect)
+  end
+
+  def draw_bleed_label(x, y)
+    contents.font.color = BLEED_LABEL_COLOR
+    contents.font.color.alpha = BLEED_LABEL_OPACITY
+    contents.draw_text(x + BLEED_BAR_WIDTH + 5, y, BLEED_LABEL_WIDTH, BLEED_LABEL_HEIGHT, "Bleed", 1)
   end
 
   def draw_bleed_meter(x, y, width, height, bleed_count)
-    fill_height = height * bleed_count / 5.0  # Adjusted to match the bleed count scale
-    fill_y = height - fill_height
-    red_color = Color.new(150, 0, 0)
-    contents.fill_rect(x, y + fill_y, width, fill_height, red_color)
-    #puts "Drew bleed meter with bleed_count #{bleed_count} for enemy #{@enemy.name}"
+    return if bleed_count <= 0  # Only draw the meter if there's bleed applied
+
+    fill_height = height * bleed_count / 5.0
+    fill_y = y + (height - fill_height)
+    red_color = Color.new(255, 0, 0)  # Strong red color to ensure visibility
+    contents.fill_rect(x, fill_y, width, fill_height, red_color)
+  end
+
+  def find_enemy_sprite(enemy)
+    spriteset = SceneManager.scene.instance_variable_get(:@spriteset)
+    return nil unless spriteset
+
+    # Check if the sprite arrays exist and are populated, then search for the correct sprite
+    enemy_sprites = spriteset.instance_variable_get(:@enemy_sprites)
+    if enemy_sprites && !enemy_sprites.empty?
+      return enemy_sprites.find { |s| s.battler == enemy }
+    end
+
+    sprites = spriteset.instance_variable_get(:@sprites)
+    if sprites && !sprites.empty?
+      return sprites.find { |s| s.battler == enemy }
+    end
+
+    nil  # Return nil if the sprite is not found
   end
 end
 
 #==============================================================================
-# **Sprite_BleedOutline
-#==============================================================================
-class Sprite_BleedOutline < Sprite
-  def initialize(viewport, x, y)
-    super(viewport)
-    self.bitmap = Cache.picture("BleedOutline")
-    self.x = 12
-    self.y = 300
-    self.z = 0  # Ensure the outline is under other windows but over the bleed meter
-  end
-end
-
-#==============================================================================
-# **Scene_Battle
+# ** Scene_Battle
 #==============================================================================
 class Scene_Battle < Scene_Base
   alias start_bleed start
@@ -128,42 +178,22 @@ class Scene_Battle < Scene_Base
   end
 
   def create_bleed_meters
-    @bleed_meters = []
-    @bleed_meter_windows = []
-    @bleed_outlines = []
-    $game_troop.members.each_with_index do |enemy, index|
-      x = 0 + index * 60  # Adjust spacing as needed
-      y = Graphics.height - 225
-      bleed_meter = Window_BleedMeter.new(x, y, enemy)
-      bleed_outline = Sprite_BleedOutline.new(nil, x - 5, y + 24)  # Adjust these coordinates to position the outline correctly
-      @bleed_meters.push(bleed_meter)
-      @bleed_outlines.push(bleed_outline)
-      add_bleed_meter_window(bleed_meter)
-      add_bleed_outline_sprite(bleed_outline)
-    end
+    @bleed_meter_window = Window_BleedMeters.new
+    add_bleed_meter_window(@bleed_meter_window)
   end
 
   def dispose_bleed_meters
-    @bleed_meters.each(&:dispose)
-    @bleed_meter_windows.each(&:dispose)
-    @bleed_outlines.each(&:dispose)
+    @bleed_meter_window.dispose if @bleed_meter_window
   end
 
   alias update_bleed update
   def update
     update_bleed
-    @bleed_meters.each(&:refresh)
+    @bleed_meter_window.refresh
   end
 
   def add_bleed_meter_window(window)
-    @bleed_meter_windows ||= []
-    @bleed_meter_windows.push(window)
     @window ||= []
     @window.push(window)
-  end
-
-  def add_bleed_outline_sprite(sprite)
-    @sprites ||= []
-    @sprites.push(sprite)
   end
 end
