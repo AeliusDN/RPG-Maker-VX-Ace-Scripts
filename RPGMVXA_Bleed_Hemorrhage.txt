@@ -114,7 +114,7 @@ class Window_BleedMeters < Window_Base
     border_y = meter_y + BLEED_BORDER_OFFSET_Y
 
     # Debugging output to console
-    puts "Drawing bleed meter for #{enemy.name} at (#{meter_x}, #{meter_y}) with border at (#{border_x}, #{border_y})"
+    #puts "Drawing bleed meter for #{enemy.name} at (#{meter_x}, #{meter_y}) with border at (#{border_x}, #{border_y})"
 
     # Draw the bleed meter elements
     draw_bleed_meter(meter_x, meter_y + BLEED_LABEL_HEIGHT, BLEED_BAR_WIDTH, BLEED_BAR_HEIGHT, enemy.bleed_count)
