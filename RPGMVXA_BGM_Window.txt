@@ -1,21 +1,68 @@
 #==============================================================================
+# ** Scene_Battle
+#------------------------------------------------------------------------------
+#  This class performs the battle screen processing.
+#==============================================================================
+
+class Scene_Battle < Scene_Base
+  alias_method :bgm_display_battle_start, :start
+  alias_method :bgm_display_battle_update, :update
+  alias_method :bgm_display_battle_terminate, :terminate
+
+  #--------------------------------------------------------------------------
+  # * Start Processing
+  #--------------------------------------------------------------------------
+  def start
+    bgm_display_battle_start
+    create_bgm_display_window
+  end
+
+  #--------------------------------------------------------------------------
+  # * Update Frame
+  #--------------------------------------------------------------------------
+  def update
+    bgm_display_battle_update
+    check_bgm_change if @bgm_display_window
+    @bgm_display_window.update if @bgm_display_window && !@bgm_display_window.disposed?
+  end
+
+  #--------------------------------------------------------------------------
+  # * Termination Processing
+  #--------------------------------------------------------------------------
+  def terminate
+    bgm_display_battle_terminate
+    @bgm_display_window.dispose if @bgm_display_window
+  end
+
+  #--------------------------------------------------------------------------
+  # * Create BGM Display Window
+  #--------------------------------------------------------------------------
+  def create_bgm_display_window
+    @bgm_display_window = BGM_Display_Window.new
+  end
+
+  #--------------------------------------------------------------------------
+  # * Check BGM Change During Battle
+  #--------------------------------------------------------------------------
+  def check_bgm_change
+    current_bgm = RPG::BGM.last.name
+    if @bgm_display_window && @bgm_display_window.instance_variable_get(:@bgm_name) != current_bgm
+      @bgm_display_window.refresh
+    end
+  end
+
+  #--------------------------------------------------------------------------
+  # * Set BGM Display Window Width
+  #--------------------------------------------------------------------------
+  def set_bgm_window_width(width)
+    @bgm_display_window.set_manual_width(width) if @bgm_display_window
+  end
+end
+
+#==============================================================================
 # ** BGM_Display_Window
 #------------------------------------------------------------------------------
 #  This window displays the current BGM in the top right corner of the screen.
-#==============================================================================
-#  Script calls:
-#  "hide_bgm_display_window"
-#  "show_bgm_display_window"
-#  "set_bgm_window_width(x)"  # For battle screen width setting
-#==============================================================================
-#  Memo tag:
-#  Use this memo tag to specify the window's width on a per-map basis.
-#  "<BGM_Window_Width: x>"
-#  Each map must have this tag. You can use script calls to hide it though.
-#  Uncomment specific "put" commands to view window width generation in the
-#  RPG Maker VX Ace Console.
-#==============================================================================
-#  Can be disabled with switches specified at line 168
 #==============================================================================
 
 class BGM_Display_Window < Window_Base
@@ -125,157 +172,5 @@ class BGM_Display_Window < Window_Base
     if self.opacity == 0
       self.visible = false
     end
-  end
-end
-
-#==============================================================================
-# ** Scene_Map
-#------------------------------------------------------------------------------
-#  This class performs the map screen processing.
-#==============================================================================
-
-class Scene_Map < Scene_Base
-  alias_method :bgm_display_start, :start
-  alias_method :bgm_display_update, :update
-  alias_method :bgm_display_post_transfer, :post_transfer
-  alias_method :bgm_display_pre_terminate, :pre_terminate
-
-  #--------------------------------------------------------------------------
-  # * Start Processing
-  #--------------------------------------------------------------------------
-  def start
-    bgm_display_start
-  end
-
-  #--------------------------------------------------------------------------
-  # * Post-Transfer Processing
-  #--------------------------------------------------------------------------
-  def post_transfer
-    bgm_display_post_transfer
-    $bgm_display_window_created = false
-    create_bgm_display_window unless $bgm_display_window_created
-  end
-
-  #--------------------------------------------------------------------------
-  # * Update Frame
-  #--------------------------------------------------------------------------
-  def update
-    bgm_display_update
-    @bgm_display_window.update if @bgm_display_window && !@bgm_display_window.disposed?
-  end
-
-  #--------------------------------------------------------------------------
-  # * Pre-Terminate Processing
-  #--------------------------------------------------------------------------
-  def pre_terminate
-    bgm_display_pre_terminate
-  end
-
-  #--------------------------------------------------------------------------
-  # * Create BGM Display Window
-  #--------------------------------------------------------------------------
-  def create_bgm_display_window
-    if $game_switches[1141] # Switch ID 1141 to disable script
-      @bgm_display_window = nil
-    else
-      @bgm_display_window = BGM_Display_Window.new
-      $bgm_display_window_created = true
-    end
-  end
-
-  #--------------------------------------------------------------------------
-  # * Hide BGM Display Window
-  #--------------------------------------------------------------------------
-  def hide_bgm_display_window
-    @bgm_display_window.visible = false if @bgm_display_window
-  end
-
-  #--------------------------------------------------------------------------
-  # * Show BGM Display Window
-  #--------------------------------------------------------------------------
-  def show_bgm_display_window
-    if @bgm_display_window
-      @bgm_display_window.visible = true
-      @bgm_display_window.reset_fade_timer
-    end
-  end
-end
-
-#==============================================================================
-# ** Scene_Battle
-#------------------------------------------------------------------------------
-#  This class performs the battle screen processing.
-#==============================================================================
-
-class Scene_Battle < Scene_Base
-  alias_method :bgm_display_battle_start, :start
-  alias_method :bgm_display_battle_update, :update
-  alias_method :bgm_display_battle_terminate, :terminate
-
-  #--------------------------------------------------------------------------
-  # * Start Processing
-  #--------------------------------------------------------------------------
-  def start
-    bgm_display_battle_start
-    create_bgm_display_window
-  end
-
-  #--------------------------------------------------------------------------
-  # * Update Frame
-  #--------------------------------------------------------------------------
-  def update
-    bgm_display_battle_update
-    @bgm_display_window.update if @bgm_display_window && !@bgm_display_window.disposed?
-  end
-
-  #--------------------------------------------------------------------------
-  # * Termination Processing
-  #--------------------------------------------------------------------------
-  def terminate
-    bgm_display_battle_terminate
-    @bgm_display_window.dispose if @bgm_display_window
-  end
-
-  #--------------------------------------------------------------------------
-  # * Create BGM Display Window
-  #--------------------------------------------------------------------------
-  def create_bgm_display_window
-    @bgm_display_window = BGM_Display_Window.new
-  end
-
-  #--------------------------------------------------------------------------
-  # * Set BGM Display Window Width
-  #--------------------------------------------------------------------------
-  def set_bgm_window_width(width)
-    @bgm_display_window.set_manual_width(width) if @bgm_display_window
-  end
-end
-
-#==============================================================================
-# ** Script Call Methods
-#------------------------------------------------------------------------------
-#  These methods can be used to hide/show the BGM display window and set its width.
-#==============================================================================
-
-class Game_Interpreter
-  #--------------------------------------------------------------------------
-  # * Hide BGM Display Window
-  #--------------------------------------------------------------------------
-  def hide_bgm_display_window
-    SceneManager.scene.hide_bgm_display_window if SceneManager.scene.is_a?(Scene_Map) || SceneManager.scene.is_a?(Scene_Battle)
-  end
-
-  #--------------------------------------------------------------------------
-  # * Show BGM Display Window
-  #--------------------------------------------------------------------------
-  def show_bgm_display_window
-    SceneManager.scene.show_bgm_display_window if SceneManager.scene.is_a?(Scene_Map) || SceneManager.scene.is_a?(Scene_Battle)
-  end
-
-  #--------------------------------------------------------------------------
-  # * Set BGM Window Width in Battle
-  #--------------------------------------------------------------------------
-  def set_bgm_window_width(width)
-    SceneManager.scene.set_bgm_window_width(width) if SceneManager.scene.is_a?(Scene_Battle)
   end
 end
