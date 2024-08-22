@@ -1,0 +1,31 @@
+=begin
+This script creates a "potion sickness effect"
+Assign the <potion sickness> tag to an item and set a state id in here to
+enforce the script.
+This will seal any items with the tag while the state is in effect.
+=end
+
+class Game_Actor < Game_Battler
+  #--------------------------------------------------------------------------
+  # * Alias method: usable?
+  #--------------------------------------------------------------------------
+  alias_method :actor_usable_with_potion_sickness_check?, :usable?
+  
+  def usable?(item)
+    # Check if item is nil to avoid errors
+    return false if item.nil?
+    
+    puts "Checking if '#{item.name}' is usable by actor '#{self.name}'." # Debug output
+    
+    if item.is_a?(RPG::Item) && item.note.include?("<potion sickness>")
+      if self.state?(254) # Replace 254 with your actual state ID for potion sickness
+        puts "Item '#{item.name}' is locked due to Potion Sickness for actor '#{self.name}'."
+        return false
+      else
+        puts "State 254 is NOT active on actor '#{self.name}'." # Debug output
+      end
+    end
+    
+    actor_usable_with_potion_sickness_check?(item)
+  end
+end
