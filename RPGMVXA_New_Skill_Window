@@ -1,3 +1,8 @@
+=begin
+Completely restructures the skill menu for use with manual leveling script.
+Made to work with 星潟's skill organizer script.
+=end
+
 class Scene_Skill < Scene_ItemBase
   def start
     super
@@ -58,8 +63,8 @@ class Scene_Skill < Scene_ItemBase
   def on_category_ok
     @skill_window.actor = @actor # Ensure actor is correctly assigned
     @skill_window.stype_id = current_stype_id
-    puts "Debug: Actor set to #{@skill_window.actor.name}" if @skill_window.actor
-    puts "Debug: Skill type set to #{@skill_window.stype_id}" if @skill_window.stype_id
+    #puts "Debug: Actor set to #{@skill_window.actor.name}" if @skill_window.actor
+    #puts "Debug: Skill type set to #{@skill_window.stype_id}" if @skill_window.stype_id
     @skill_window.refresh
     @skill_window.activate
   end
@@ -154,7 +159,7 @@ class Window_SkillList < Window_Selectable
   end
 
   def refresh
-    puts "Debug: Refreshing skill list for actor #{@actor ? @actor.name : 'None'} with stype_id #{@stype_id}"
+    #puts "Debug: Refreshing skill list for actor #{@actor ? @actor.name : 'None'} with stype_id #{@stype_id}"
     make_skill_list
     create_contents
     draw_all_items
@@ -167,10 +172,10 @@ class Window_SkillList < Window_Selectable
       else
         @data = @actor.skills.select { |skill| skill.stype_id == @stype_id && !@actor.skill_seal.include?(skill.id) }
       end
-      puts "Debug: Skill list contains #{@data.size} skills"
+      #puts "Debug: Skill list contains #{@data.size} skills"
     else
       @data = []
-      puts "Debug: No actor assigned"
+      #puts "Debug: No actor assigned"
     end
   end
 
