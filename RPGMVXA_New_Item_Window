@@ -103,7 +103,7 @@ class Scene_Item < Scene_ItemBase
 
   def apply_item_effects(user, item)
     user.item_apply(user, item)
-    ItemMHPIncrease.apply_mhp_increase(item)
+    ItemStatIncrease.apply_stat_increase(item)  # Generalized to handle all stats
 
     if item.is_a?(RPG::Item) && item.itype_id == 1
       $game_party.lose_item(item, 1) # Ensure item is only consumed once
