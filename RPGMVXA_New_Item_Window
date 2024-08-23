@@ -1,3 +1,9 @@
+=begin
+Completely restructures the item menu for use with the manual leveling script.
+Use curly braces {} in the memo field of an item to make the text inside of the
+curly braces appear in the description.
+=end
+
 class Scene_Item < Scene_ItemBase
   def start
     super
