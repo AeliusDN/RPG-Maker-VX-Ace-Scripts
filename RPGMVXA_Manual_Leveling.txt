@@ -4,6 +4,7 @@ module MLV_CHANGE
   MANUAL_STAT_INTERVAL = 50
 
   MANUAL_STAT_SETTINGS = {
+    1 => { :mhp => 2000, :mmp => 500, :atk => 100, :def => 100, :mag => 100, :mdf => 100, :agi => 100, :luk => 100 },
     50 => { :mhp => 10000, :mmp => 1000, :atk => 500, :def => 500, :mag => 500, :mdf => 500, :agi => 500, :luk => 500 },
     100 => { :mhp => 25000, :mmp => 5000, :atk => 650, :def => 650, :mag => 650, :mdf => 650, :agi => 650, :luk => 650 },
     150 => { :mhp => 40000, :mmp => 12500, :atk => 800, :def => 800, :mag => 800, :mdf => 800, :agi => 800, :luk => 800 },
@@ -52,50 +53,96 @@ class Game_BattlerBase
   def param_max(param_id)
     case param_id
     when 0  # MHP
-      return 1000000  # Maximum HP
+      return 2000000  # Maximum HP
     when 1  # MMP
-      return 100000   # Maximum MP
-    when 2  # ATK
-      return 10000    # Maximum Attack
-    when 3  # DEF
-      return 10000    # Maximum Defense
-    when 4  # MAG
-      return 10000    # Maximum Magic Attack
-    when 5  # MDF
-      return 10000    # Maximum Magic Defense
-    when 6  # AGI
-      return 10000    # Maximum Agility
-    when 7  # LUK
-      return 10000    # Maximum Luck
+      return 1000000   # Maximum MP
+    when 2..7
+      return 20000    # Maximum other stats
     else
-      return 10000    # Default maximum for other parameters
+      return 20000    # Default maximum
     end
   end
 end
 
 class Game_Actor < Game_Battler
-  # Override to allow higher MHP values
-  def param_max(param_id)
-    if param_id == 0 # MHP
-      return 1000000  # Set this to your desired max HP limit
-    else
-      super
+  def param_base(param_id)
+    base_value = MLV_CHANGE::MANUAL_STAT_SETTINGS[1000][stat_id_to_symbol(param_id)]
+    #puts "Debug: Setting Base #{stat_id_to_symbol(param_id).upcase} to #{base_value} for #{name}"
+    return base_value
+  end
+
+  def stat_id_to_symbol(param_id)
+    case param_id
+    when 0 then :mhp
+    when 1 then :mmp
+    when 2 then :atk
+    when 3 then :def
+    when 4 then :mag
+    when 5 then :mdf
+    when 6 then :agi
+    when 7 then :luk
+    else nil
     end
   end
 
-  def mhp
-    mhp_value = interpolate_stats(0) # Directly using the interpolated value without clamping
-    #puts "Debug: Actor #{self.name}, Calculated MHP: #{mhp_value}, Max HP: #{param_max(0)}"
-    mhp_value
+  def param_plus(param_id)
+    base_plus = super(param_id)
+    additional_bonus = case param_id
+                       when 0 then @bonus_mhp || 0
+                       else 0
+                       end
+    equip_bonus = equip_stat_bonus(param_id)
+
+    final_value = base_plus + additional_bonus + equip_bonus
+    #puts "Debug: Final value for Param #{param_id} (#{stat_id_to_symbol(param_id).upcase}): #{final_value}"
+    return final_value
   end
 
-  def hp=(value)
-    value = apply_clamp(value, 0, mhp) # Ensure HP is clamped correctly but not MHP
-    super(value)
-    #puts "Setting HP: #{value}, Max HP: #{mhp}"
+  def param_max(param_id)
+    # Equipment can surpass the standard cap for MHP
+    if param_id == 0
+      base_max = 1000000 # Base max MHP
+      equip_bonus = equip_stat_bonus(param_id)
+      return base_max + equip_bonus
+    else
+      return super(param_id)
+    end
   end
-  
-  alias param_base_lb param_base
+
+  def equip_stat_bonus(param_id)
+    bonus = 0
+    equips.each do |item|
+      next if item.nil?
+      item.note.scan(/<EquipBonus:\s*(.*?)>/).each do |match|
+        bonuses = match[0].split(',')
+        bonuses.each do |bonus_string|
+          stat, value = bonus_string.strip.split('+')
+          case stat
+          when 'MHP'
+            bonus += value.to_i if param_id == 0
+          when 'MMP'
+            bonus += value.to_i if param_id == 1
+          when 'ATK'
+            bonus += value.to_i if param_id == 2
+          when 'DEF'
+            bonus += value.to_i if param_id == 3
+          when 'MAG'
+            bonus += value.to_i if param_id == 4
+          when 'MDF'
+            bonus += value.to_i if param_id == 5
+          when 'AGI'
+            bonus += value.to_i if param_id == 6
+          when 'LUK'
+            bonus += value.to_i if param_id == 7
+          end
+        end
+      end
+    end
+    #puts "Debug: Equip Bonus for Param #{param_id} (#{stat_id_to_symbol(param_id).upcase}): #{bonus}"
+    bonus
+  end
+
+  alias_method :param_base_lb, :param_base
   def param_base(param_id)
     if actor_class_has_manual_stat_growth?
       if MLV_CHANGE::MANUAL_STAT_SETTINGS.keys.include?(@level)
@@ -109,11 +156,10 @@ class Game_Actor < Game_Battler
     return apply_clamp(param_base_lb(param_id), 1, param_max(param_id))
   end
 
-  alias max_level_lb max_level
+  alias_method :max_level_lb, :max_level
   def max_level
     base_max_level = max_level_lb
     total_max_level = base_max_level + level_bonus
-    #puts "Actor: #{self.name}, Base Max Level: #{base_max_level}, Bonus: #{level_bonus}, Total Max Level: #{total_max_level}"
     total_max_level
   end
 
@@ -150,7 +196,6 @@ class Game_Actor < Game_Battler
 
     total_levels = next_level - prev_level
     if total_levels <= 0
-      #puts "Interpolation Error: total_levels is zero or negative"
       return prev_value # Fallback to prevent errors
     end
 
@@ -158,7 +203,6 @@ class Game_Actor < Game_Battler
     ratio = levels_passed.to_f / total_levels
 
     interpolated_value = prev_value + (next_value - prev_value) * ratio
-    #puts "Actor: #{self.name}, Level: #{@level}, Stat: #{stat_symbol}, Interpolated Value: #{interpolated_value}, Prev Level: #{prev_level}, Next Level: #{next_level}"
     interpolated_value.to_i
   end
 
@@ -170,44 +214,15 @@ class Game_Actor < Game_Battler
     return prev_level, next_level
   end
 
-  def stat_id_to_symbol(param_id)
-    case param_id
-    when 0
-      :mhp
-    when 1
-      :mmp
-    when 2
-      :atk
-    when 3
-      :def
-    when 4
-      :mag
-    when 5
-      :mdf
-    when 6
-      :agi
-    when 7
-      :luk
-    else
-      nil
-    end
-  end
-
   def apply_clamp(value, min, max)
     [[value, max].min, min].max
   end
 
-  # Override the base mhp calculation
-  def mhp
-    mhp_value = apply_clamp(interpolate_stats(0), 1, param_max(0))
-    #puts "Debug: Actor #{self.name}, Calculated MHP: #{mhp_value}, Max HP: #{param_max(0)}"
-    mhp_value
-  end
-
-  def hp=(value)
-    value = apply_clamp(value, 0, mhp)
-    super(value)
-    #puts "Setting HP: #{value}, Max HP: #{mhp}"
+  def add_bonus_mhp(value)
+    @param_base ||= Array.new(8, 0)
+    @param_base[0] += value # Assuming MHP is at index 0
+    self.mhp = [@param_base[0], param_max(0)].min
+    self.hp = [@hp, mhp].min # Ensure HP is clamped correctly
   end
 end
 
@@ -218,6 +233,20 @@ if MLV_CHANGE::LVDRW > 0
       draw_text(x, y, 32, line_height, Vocab::level_a)
       change_color(normal_color)
       draw_text(x + 32 - MLV_CHANGE::LVDRW, y, 24 + MLV_CHANGE::LVDRW, line_height, actor.level, 2)
+    end
+  end
+end
+
+module ItemMHPIncrease
+  def self.apply_mhp_increase(item)
+    return if item.nil? || item.note.nil?
+    return unless item.note =~ /<IncreaseMHP:\s*(\d+)>/
+    value = $1.to_i
+    $game_party.members.each do |actor|
+      next unless actor.hp > 0 # Ensure actor is alive
+      actor.add_bonus_mhp(value)
+      actor.hp = [actor.hp, actor.mhp].min # Ensure HP is clamped correctly
+      #puts "Actor: #{actor.name}, New MHP: #{actor.mhp}, Added: #{value}"
     end
   end
 end
