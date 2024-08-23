@@ -1,0 +1,199 @@
+class Scene_Skill < Scene_ItemBase
+  def start
+    super
+    create_help_window
+    create_category_window
+    create_skill_window
+    create_actor_window
+    create_status_overlay_window
+    @actor = $game_party.menu_actor
+    @category_window.activate
+    @category_window.select(0)
+    on_category_ok  # Ensure the skill list is populated initially
+  end
+
+  def create_status_overlay_window
+    @status_overlay_window = Window_StatusOverlay.new
+    @status_overlay_window.viewport = @viewport
+    @status_overlay_window.hide
+    @selected_skill = nil # To store the currently selected skill
+  end
+
+  def create_help_window
+    @help_window = Window_Help.new(6)
+    @help_window.viewport = @viewport
+    @help_window.z = 200
+    @help_window.opacity = 255
+  end
+
+  def create_category_window
+    wy = @help_window.height
+    @category_window = Window_CustomSkillCommand.new(0, wy)
+    @category_window.viewport = @viewport
+    @category_window.help_window = @help_window
+    @category_window.set_handler(:ok, method(:on_category_ok))
+    @category_window.set_handler(:cancel, method(:return_scene))
+    @category_window.activate
+  end
+
+  def create_skill_window
+    wy = @category_window.y + @category_window.height
+    wh = Graphics.height - wy
+    @skill_window = Window_SkillList.new(0, wy, Graphics.width, wh)
+    @skill_window.viewport = @viewport
+    @skill_window.help_window = @help_window
+    @skill_window.set_handler(:ok, method(:on_skill_confirm))
+    @skill_window.set_handler(:cancel, method(:on_skill_cancel))
+    @skill_window.refresh
+  end
+
+  def create_actor_window
+    @actor_window = Window_MenuActor.new
+    @actor_window.viewport = @viewport
+    @actor_window.z = 250
+    @actor_window.opacity = 255
+    @actor_window.hide
+  end
+
+  def on_category_ok
+    @skill_window.actor = @actor # Ensure actor is correctly assigned
+    @skill_window.stype_id = current_stype_id
+    puts "Debug: Actor set to #{@skill_window.actor.name}" if @skill_window.actor
+    puts "Debug: Skill type set to #{@skill_window.stype_id}" if @skill_window.stype_id
+    @skill_window.refresh
+    @skill_window.activate
+  end
+
+  def on_skill_confirm
+    @selected_skill = @skill_window.item # Store the selected skill
+    if skill_usable?(@selected_skill)
+      @status_overlay_window.show_status($game_party.menu_actor, @selected_skill)
+      @skill_window.set_handler(:ok, method(:use_skill))
+      @skill_window.set_handler(:cancel, method(:on_skill_cancel))
+      @skill_window.activate
+    else
+      Sound.play_buzzer
+      @skill_window.activate
+    end
+  end
+
+  def on_skill_cancel
+    @selected_skill = nil # Clear the selected skill
+    @status_overlay_window.hide
+    @skill_window.unselect
+    @skill_window.set_handler(:ok, method(:on_skill_confirm))
+    @category_window.activate
+  end
+
+  def use_skill
+    if @selected_skill # Use the stored skill
+      Sound.play_use_item
+      determine_skill(@selected_skill)
+      @skill_window.redraw_current_item
+      on_skill_cancel # Return to skill selection after using the skill
+    end
+  end
+
+  def skill_usable?(skill)
+    user = $game_party.menu_actor
+    user && user.usable?(skill)
+  end
+
+  def determine_skill(skill)
+    user = $game_party.menu_actor
+    apply_skill_effects(user, skill)
+  end
+
+  def apply_skill_effects(user, skill)
+    user.use_item(skill)
+    @actor_window.refresh
+    @skill_window.refresh
+    check_common_event
+    check_gameover
+  end
+
+  def current_stype_id
+    @category_window.current_ext
+  end
+end
+
+class Window_SkillList < Window_Selectable
+  attr_accessor :actor
+  attr_accessor :stype_id
+
+  def initialize(x, y, width, height)
+    super(x, y, width, height)
+    @actor = nil
+    @stype_id = 0
+    @data = []
+    refresh
+  end
+
+  def col_max
+    return 3
+  end
+
+  def spacing
+    return 8
+  end
+
+  def draw_item(index)
+    skill = @data[index]
+    if skill
+      rect = item_rect(index)
+      draw_item_name(skill, rect.x, rect.y, enable?(skill))
+    end
+  end
+
+  def item_max
+    @data ? @data.size : 1
+  end
+
+  def item
+    @data && index >= 0 ? @data[index] : nil
+  end
+
+  def refresh
+    puts "Debug: Refreshing skill list for actor #{@actor ? @actor.name : 'None'} with stype_id #{@stype_id}"
+    make_skill_list
+    create_contents
+    draw_all_items
+  end
+
+  def make_skill_list
+    if @actor
+      if @stype_id == AB_SSS2::STI
+        @data = @actor.skill_seal.collect { |skill_id| $data_skills[skill_id] }
+      else
+        @data = @actor.skills.select { |skill| skill.stype_id == @stype_id && !@actor.skill_seal.include?(skill.id) }
+      end
+      puts "Debug: Skill list contains #{@data.size} skills"
+    else
+      @data = []
+      puts "Debug: No actor assigned"
+    end
+  end
+
+  def update_help
+    @help_window.set_item(item)
+  end
+end
+
+class Window_CustomSkillCommand < Window_HorzCommand
+  def initialize(x, y)
+    super(x, y)
+  end
+
+  def window_width
+    Graphics.width
+  end
+
+  def col_max
+    return 2 # Only two columns for "Techniques" and "Skill Storage"
+  end
+
+  def make_command_list
+    add_command("Techniques", :tech, true, 1)
+    add_command("Skill Storage", :storage, true, AB_SSS2::STI)
+  end
+end
