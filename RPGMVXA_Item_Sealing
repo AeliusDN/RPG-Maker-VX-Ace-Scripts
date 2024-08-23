@@ -1,0 +1,46 @@
+class Game_Actor < Game_Battler
+  #--------------------------------------------------------------------------
+  # * Sealed Items Hash
+  #--------------------------------------------------------------------------
+  def sealed_items
+    @sealed_items ||= {}
+  end
+
+  #--------------------------------------------------------------------------
+  # * Check if Item is Sealed
+  #--------------------------------------------------------------------------
+  def item_sealed?(item_id)
+    sealed_items[item_id]
+  end
+
+  #--------------------------------------------------------------------------
+  # * Seal an Item
+  #--------------------------------------------------------------------------
+  def seal_item(item_id)
+    sealed_items[item_id] = true
+    puts "Item ID #{item_id} has been sealed for actor '#{self.name}'." # Debug output
+  end
+
+  #--------------------------------------------------------------------------
+  # * Unseal an Item
+  #--------------------------------------------------------------------------
+  def unseal_item(item_id)
+    sealed_items.delete(item_id)
+    puts "Item ID #{item_id} has been unsealed for actor '#{self.name}'." # Debug output
+  end
+
+  #--------------------------------------------------------------------------
+  # * Alias method: usable?
+  #--------------------------------------------------------------------------
+  alias_method :usable_with_item_seal_check?, :usable?
+  
+  def usable?(item)
+    # Check if item is nil to avoid errors
+    return false if item.nil?
+
+    # Check if the item is sealed
+    return false if item_sealed?(item.id)
+
+    usable_with_item_seal_check?(item)
+  end
+end
