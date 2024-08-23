@@ -1,25 +1,3 @@
-=begin
-This scrip introduces a new leveling system via predetermined stats for each
-"level milestone". It then interpolates those stat milestones to fill the gaps.
-This script also allows player stats to increase beyond their default maximum,
-(as well as their level). It also works to allow players to increase their stats
-even further through "bonus" stats, which are given through items with these
-notetags:
-      mhp: <IncreaseMHP:x>,
-      mmp: <IncreaseMMP:x>,
-      atk: <IncreaseATK:x>,
-      def: <IncreaseDEF:x>,
-      mag: <IncreaseMAG:x>,
-      mdf: <IncreaseMDF:x>,
-      agi: <IncreaseAGI:x>,
-      luk: <IncreaseLUK:x>
-On top of that, the script gives extra stat leeway so that even when the player
-is max level and has max bonus stats, they can still receive the stat bonuses
-from equipment. You have to add this notetag to the equipment though:
-      <EquipBonus: MHP, MMP, ATK, DEF, MAG, MDF, AGI, LUK>
-      Example: <EquipBonus: MHP+10, ATK+100, etc...>
-=end
-
 module MLV_CHANGE
   LVDRW  = 8
 
@@ -87,7 +65,7 @@ class Game_BattlerBase
 end
 
 class Game_Actor < Game_Battler
-  
+
   # Define max bonuses for each stat
   MAX_BONUS = {
     mhp: 300000, # Max bonus MHP
@@ -100,7 +78,7 @@ class Game_Actor < Game_Battler
     luk: 3000    # Max bonus LUK
   }
   
-   def stat_id_to_symbol(param_id)
+  def stat_id_to_symbol(param_id)
     case param_id
     when 0 then :mhp
     when 1 then :mmp
