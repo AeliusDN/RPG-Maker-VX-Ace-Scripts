@@ -1,3 +1,25 @@
+=begin
+This scrip introduces a new leveling system via predetermined stats for each
+"level milestone". It then interpolates those stat milestones to fill the gaps.
+This script also allows player stats to increase beyond their default maximum,
+(as well as their level). It also works to allow players to increase their stats
+even further through "bonus" stats, which are given through items with these
+notetags:
+      mhp: <IncreaseMHP:x>,
+      mmp: <IncreaseMMP:x>,
+      atk: <IncreaseATK:x>,
+      def: <IncreaseDEF:x>,
+      mag: <IncreaseMAG:x>,
+      mdf: <IncreaseMDF:x>,
+      agi: <IncreaseAGI:x>,
+      luk: <IncreaseLUK:x>
+On top of that, the script gives extra stat leeway so that even when the player
+is max level and has max bonus stats, they can still receive the stat bonuses
+from equipment. You have to add this notetag to the equipment though:
+      <EquipBonus: MHP, MMP, ATK, DEF, MAG, MDF, AGI, LUK>
+      Example: <EquipBonus: MHP+10, ATK+100, etc...>
+=end
+
 module MLV_CHANGE
   LVDRW  = 8
 
@@ -65,13 +87,20 @@ class Game_BattlerBase
 end
 
 class Game_Actor < Game_Battler
-  def param_base(param_id)
-    base_value = MLV_CHANGE::MANUAL_STAT_SETTINGS[1000][stat_id_to_symbol(param_id)]
-    #puts "Debug: Setting Base #{stat_id_to_symbol(param_id).upcase} to #{base_value} for #{name}"
-    return base_value
-  end
-
-  def stat_id_to_symbol(param_id)
+  
+  # Define max bonuses for each stat
+  MAX_BONUS = {
+    mhp: 300000, # Max bonus MHP
+    mmp: 175000, # Max bonus MMP
+    atk: 3000,   # Max bonus ATK
+    def: 3000,   # Max bonus DEF
+    mag: 3000,   # Max bonus MAG
+    mdf: 3000,   # Max bonus MDF
+    agi: 3000,   # Max bonus AGI
+    luk: 3000    # Max bonus LUK
+  }
+  
+   def stat_id_to_symbol(param_id)
     case param_id
     when 0 then :mhp
     when 1 then :mmp
@@ -85,28 +114,42 @@ class Game_Actor < Game_Battler
     end
   end
 
-  def param_plus(param_id)
-    base_plus = super(param_id)
-    additional_bonus = case param_id
-                       when 0 then @bonus_mhp || 0
-                       else 0
-                       end
-    equip_bonus = equip_stat_bonus(param_id)
+  # Add or increase bonus to any stat
+  def add_bonus_param(param_id, value)
+    stat_symbol = stat_id_to_symbol(param_id)
+    return if stat_symbol.nil?
 
-    final_value = base_plus + additional_bonus + equip_bonus
-    #puts "Debug: Final value for Param #{param_id} (#{stat_id_to_symbol(param_id).upcase}): #{final_value}"
-    return final_value
+    max_bonus = MAX_BONUS[stat_symbol]
+    @bonus_params ||= {}
+    @bonus_params[stat_symbol] = (@bonus_params[stat_symbol] || 0) + value
+    @bonus_params[stat_symbol] = [@bonus_params[stat_symbol], max_bonus].min # Clamp to max bonus
+
+    refresh # Ensure stats are updated after the change
+    p "Debug: Added #{value} to #{stat_symbol.upcase}. New bonus: #{@bonus_params[stat_symbol]}"
   end
 
-  def param_max(param_id)
-    # Equipment can surpass the standard cap for MHP
-    if param_id == 0
-      base_max = 1000000 # Base max MHP
-      equip_bonus = equip_stat_bonus(param_id)
-      return base_max + equip_bonus
-    else
-      return super(param_id)
+  # Override the param_plus method to include the bonus for each stat
+  alias_method :param_plus_with_bonus, :param_plus
+  def param_plus(param_id)
+    bonus = param_plus_with_bonus(param_id)
+    stat_symbol = stat_id_to_symbol(param_id)
+    if stat_symbol && @bonus_params
+      bonus += @bonus_params[stat_symbol].to_i
+      p "Debug: #{stat_symbol.upcase} after adding bonus: #{bonus} (Base: #{param_plus_with_bonus(param_id)}, Bonus: #{@bonus_params[stat_symbol]})"
     end
+    bonus
+  end
+
+  # Override the param_max method to ensure it accounts for the bonus for each stat
+  alias_method :param_max_with_bonus, :param_max
+  def param_max(param_id)
+    max_value = super(param_id)
+    stat_symbol = stat_id_to_symbol(param_id)
+    if stat_symbol && @bonus_params
+      max_value += @bonus_params[stat_symbol].to_i
+      p "Debug: Max #{stat_symbol.upcase}: #{max_value} (Base Max: #{super(param_id)}, Bonus: #{@bonus_params[stat_symbol]})"
+    end
+    max_value
   end
 
   def equip_stat_bonus(param_id)
@@ -217,13 +260,6 @@ class Game_Actor < Game_Battler
   def apply_clamp(value, min, max)
     [[value, max].min, min].max
   end
-
-  def add_bonus_mhp(value)
-    @param_base ||= Array.new(8, 0)
-    @param_base[0] += value # Assuming MHP is at index 0
-    self.mhp = [@param_base[0], param_max(0)].min
-    self.hp = [@hp, mhp].min # Ensure HP is clamped correctly
-  end
 end
 
 if MLV_CHANGE::LVDRW > 0
@@ -237,16 +273,40 @@ if MLV_CHANGE::LVDRW > 0
   end
 end
 
-module ItemMHPIncrease
-  def self.apply_mhp_increase(item)
+module ItemStatIncrease
+  def self.apply_stat_increase(item)
     return if item.nil? || item.note.nil?
-    return unless item.note =~ /<IncreaseMHP:\s*(\d+)>/
-    value = $1.to_i
+
+    stat_increases = {
+      mhp: /<IncreaseMHP:\s*(\d+)>/,
+      mmp: /<IncreaseMMP:\s*(\d+)>/,
+      atk: /<IncreaseATK:\s*(\d+)>/,
+      def: /<IncreaseDEF:\s*(\d+)>/,
+      mag: /<IncreaseMAG:\s*(\d+)>/,
+      mdf: /<IncreaseMDF:\s*(\d+)>/,
+      agi: /<IncreaseAGI:\s*(\d+)>/,
+      luk: /<IncreaseLUK:\s*(\d+)>/
+    }
+
     $game_party.members.each do |actor|
       next unless actor.hp > 0 # Ensure actor is alive
-      actor.add_bonus_mhp(value)
-      actor.hp = [actor.hp, actor.mhp].min # Ensure HP is clamped correctly
-      #puts "Actor: #{actor.name}, New MHP: #{actor.mhp}, Added: #{value}"
+      stat_increases.each do |stat, regex|
+        if item.note =~ regex
+          value = $1.to_i
+          param_id = case stat
+                     when :mhp then 0
+                     when :mmp then 1
+                     when :atk then 2
+                     when :def then 3
+                     when :mag then 4
+                     when :mdf then 5
+                     when :agi then 6
+                     when :luk then 7
+                     end
+          actor.add_bonus_param(param_id, value)
+          actor.refresh
+        end
+      end
     end
   end
 end
